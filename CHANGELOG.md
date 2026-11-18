@@ -3,6 +3,26 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-18 - The spec says how memory works as the agent-memory CLI, and its first milestone is planned
+
+- `docs/spec/agent-memory.md`: Part III and D32 (the operator's rulings).
+  Memory is the `agent-memory` binary, with the verbs `init`, `read`,
+  `write`, `search` and `index`.
+  - The store is `<agent state dir>/memory`, found exactly as the agent
+    finds its state dir (environment, then `./.env`, then `.agent`). There
+    is no `--store` flag.
+  - `write` takes flags, not JSON.
+  - `index` prints only `<memory_index>`, and the operator places it.
+  - Tool files ship in `tools/`.
+  - Results are XML on stdout, errors go to stderr, and the exit codes are
+    0, 1 and 75 (retry). There is no logging and no capability line.
+  - A banner tells readers that Part III overrides Part II's
+    agent-specific parts.
+- `docs/delivery/doing/CLI1-skeleton-init-read.md` (new) and
+  `docs/delivery/todo/cli/` (new): the `cli` milestone in three units:
+  binary, store, `init` and `read`; then `write` and `search`; then
+  `index`, tool files and releases.
+
 ## 2026-11-18 - agent-memory is its own repo, holding the memory library and its design, with nothing from the agent
 
 - Ported from `github.com/riazarbi/agent`, branch `memory`, commit `476f7da`. The whole tree was copied, then everything that is not memory was deleted as whole files and directories. No shared file was cut apart, so every file here is either unchanged or rewritten for this repo. The agent's full history, including the memory work's, stays on that branch.

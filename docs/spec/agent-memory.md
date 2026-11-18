@@ -296,6 +296,13 @@ Name the general form, then check whether Part II aims at it:
 
 # Part II — How we implement memory here
 
+> **Read with Part III.** Part II was written when memory was built into the agent. Memory is now a
+> separate CLI, `agent-memory`, that the agent reaches through shell tools. Part III overrides
+> Part II wherever they differ: the tool gate and capability line (D13, D30), the `memory.*`
+> events, seeding inside `agent.New` (D19), and built-in markers (D29, D31). The file format, read
+> model, encoder, writer, search syntax and index layout (D17–D28, D30's rendering, D31's
+> syntax) hold unchanged.
+
 General purpose, stated once (the ledger in §3.7 is its decomposition):
 **memory is the difference between what a future *context window* needs
 and what it can re-derive from the workspace, live context, or whatever of
@@ -1773,6 +1780,72 @@ Consequences: the capture test is survivability, not futurity (§4.5); and
 the `-mailbox -no-memory` daemon is where this subsystem is most
 load-bearing, so P1 smoke covers it.
 
+# Part III — The `agent-memory` CLI (D32, agreed 2026-11-18)
+
+Memory is a standalone binary that the agent uses through shell tools, following the `adulting`
+precedent. The agent has no memory code. Everything in Part II about the store holds. This part
+says how the store is reached.
+
+## III.1 Finding the store
+
+The store is `<state dir>/memory`, the `memory/` folder the agent would have used. The state dir is
+resolved exactly as the agent resolves it, so a shell tool, a livecontext entry or a timer job (all
+of which inherit the agent's environment and working directory) lands on the agent's own store:
+
+1. `AGENT_STATE_DIR` from the environment, if set and non-empty;
+2. otherwise `AGENT_STATE_DIR` from `./.env`, parsed as the agent parses it (`KEY=VALUE`, `export`
+   prefix, quotes, `#` comments);
+3. otherwise `.agent`.
+
+A relative state dir is relative to the working directory. There is no `--store` flag. A clone for
+A/B work (D24) is reached by running with a different `AGENT_STATE_DIR`.
+
+## III.2 Verbs
+
+| Verb | Arguments | Does |
+|---|---|---|
+| `init` | none | If `memory/` is missing, creates `memory/notes/` with the seed first level, and `memory/protocol/usage.md` (D19). If it exists, changes nothing. Prints what it did. |
+| `read` | `[STEM] [--block ID] [--depth N]` | D29's `memory_read`: the same result XML, and with no `STEM` the root. `--depth` defaults to 1. |
+| `write` | `STEM [--parent P] [--description D] [--tag T]… [--property K=V]… [--add TEXT]… [--replace ID=TEXT]…` | D29's `memory_write`. `--add` and `--replace` are the blocks, in argv order. Any `--tag` replaces the node's tags with the given list. `--property` values are strings. |
+| `search` | `QUERY` | D31's search, with the same syntax and the same result XML. |
+| `index` | none | Prints `<memory_index>`, laid out and budgeted as in D30, or nothing when no node loads. |
+
+- **Argument errors name the argument as the user typed it** (`STEM`, `--parent`, `--add #2`,
+  `--replace m-abc123`), never the writer's internal field names.
+- **`write` cannot clear tags or delete blocks.** Both are restructuring operations, which stay
+  open (§6).
+- **The overflow notice** in `index` cannot name a tool, because the CLI does not know which tool
+  files the operator installed. It reads `N nodes not shown: read a node to list all its children.`
+  (`node` for one).
+- **Dates** (`modified`) use the process's local time zone. The agent sets `TZ` for the processes
+  it starts.
+
+## III.3 Results, errors and exit codes
+
+- **Success:** XML on stdout (D20 renderings), exit 0.
+- **Error:** one line on stderr, exit 1. Unknown stems list up to five near matches. A missing
+  `memory/notes/` says `memory has no notes/ folder; run agent-memory init`.
+- **Retry:** "busy" and "changed on disk" (D28) go to stderr with exit 75 (`EX_TEMPFAIL`).
+- **No logging, no events.** The agent's own `tool.invoked` and `tool.error` record each call. The
+  `memory.*` events of Part II are not emitted.
+
+## III.4 What the operator arranges
+
+- **Tool files.** The repo ships `tools/memory_read.json`, `memory_write.json` and
+  `memory_search.json`. They are argv shell tools (`"command": "agent-memory"`, `prepend_args` the
+  verb), and their descriptions are D29's and D31's, adapted to flags. Installing a file is the
+  grant (D13). Leaving one out removes that capability.
+- **The index.** `agent-memory index` goes wherever the operator wants it: a livecontext entry (seen
+  at the start of each input, in the user message), a tool, or nowhere.
+- **Guidance.** `init` writes `memory/protocol/usage.md`. To use it, the operator places it, for
+  example as a `prompt/` fragment. Nothing gates it on the tools any more. The operator who chooses
+  the tools also chooses the guidance.
+
+## III.5 Not in the CLI
+
+Restructuring verbs, dreaming and the audit (§4.6, §6), a capability line, an install command, a
+Docker image, and any agent-side change.
+
 ## 5. Decisions
 
 Superseded decisions keep their number; the row says what changed and why.
@@ -1809,6 +1882,7 @@ Superseded decisions keep their number; the row says what changed and why.
 | D28 | Writing to disk | An exclusive OS lock (`flock` on `notes/.write.lock`, bounded 10 s wait, then "busy — retry") serializes writes across processes; one writer per `notes/` per process; each write from a fresh full load; create vs update by stem existence (create: valid unused stem, description, a loaded non-root parent; update: parent absent or matching); writes to skipped nodes refused; atomic temp-file-and-rename; refuse if the file changed on disk since it was read; read back through a full load and roll back on failure. §4.2 *Writing to disk*. |
 | D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. |
 | D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. |
+| D32 | The CLI (Part III) | Memory is the `agent-memory` binary, with the verbs `init`, `read`, `write`, `search` and `index`. The agent knows nothing about it: an operator installs shell-tool files from the repo's `tools/`, and puts `agent-memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<agent state dir>/memory`, found as the agent finds its state dir. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1 and 75 (retry). There is no logging and no capability line. |
 | D31 | `memory_search` | Opt-in built-in (catalogued, never seeded, no generation bump); one `query` argument in an Obsidian syntax subset (words, phrases, `-`, `OR`, `tag:`, `path:`, `file:`, `[property:value]`, no parentheses); per-node matching, hit blocks, ranking by hits then recency; 20 nodes / 5 blocks; XML via `encoding/xml`; `memory.searched`. §4.5 *`memory_search`, exactly*. |
 
 ## 6. Out of scope, deferred, open
