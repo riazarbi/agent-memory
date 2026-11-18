@@ -92,3 +92,21 @@ the resolved `<state dir>/memory`.
   the CLI.
 - Interleaved flags and positionals: Go's `flag` stops at the first positional. Decide how `read
   STEM --depth 2` is handled, make both orders work, and say how.
+
+## Post-verification notes (banked 2026-11-18)
+- **Verdict:** accepted. The independent verifier passed all six criteria live through the binary.
+  - It caught 43 of 46 mutants, and 10 inverted assertions each failed.
+  - The gate is green, with lint at 0 issues. There was no tampering, and scope is clean.
+- **Size:** 660 production lines against a target of "a few hundred". The extra is the hand-rolled
+  argument walker (flags and positionals in any order), the `.env` reader, and near matches. CLI2
+  and CLI3 reuse them.
+- **Rework in place:** the builder's spec gap 1 showed the `.env` grammar diverging from the agent's
+  in four cases (first versus last occurrence wins, `export<TAB>`, a leading `#`, an unterminated
+  quote). The spec pinned the agent's grammar, and the same builder fixed the four, with a test
+  each. It was cheaper than a fresh build.
+- **Surviving mutants, behaviour correct but untested:**
+  - an unreadable `.env` falling through instead of erroring;
+  - dropping `time/tzdata`;
+  - dropping the per-node tag dedupe in the root count.
+- **Recorded as known gaps in Part III:** the `memory/`-without-`notes/` loop; concurrent `init`
+  misreporting; skipped nodes being silent.

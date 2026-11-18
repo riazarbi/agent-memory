@@ -1793,8 +1793,17 @@ resolved exactly as the agent resolves it, so a shell tool, a livecontext entry 
 of which inherit the agent's environment and working directory) lands on the agent's own store:
 
 1. `AGENT_STATE_DIR` from the environment, if set and non-empty;
-2. otherwise `AGENT_STATE_DIR` from `./.env`, parsed as the agent parses it (`KEY=VALUE`, `export`
-   prefix, quotes, `#` comments);
+2. otherwise `AGENT_STATE_DIR` from `./.env`, parsed exactly as the agent parses it
+   (`loadDotEnv` / `parseDotEnvValue` in the agent's `internal/config/config.go`):
+   - each line is trimmed, and blank lines and lines starting with `#` are skipped;
+   - a leading `export ` (with a space) is removed;
+   - the line splits at the first `=`, and the key is trimmed;
+   - the value is left-trimmed of spaces and tabs. If it then starts with `"` or `'` and that
+     quote appears again, the value is the text between them. Otherwise it is cut at the first
+     ` #` or `\t#`, then trimmed. An unterminated quote falls through to the unquoted rule;
+   - **the first occurrence of a key wins**;
+   - an empty value counts as unset (falls through to `.agent`). A `.env` that exists but cannot
+     be read is an error;
 3. otherwise `.agent`.
 
 A relative state dir is relative to the working directory. There is no `--store` flag. A clone for
@@ -1818,7 +1827,8 @@ A/B work (D24) is reached by running with a different `AGENT_STATE_DIR`.
   files the operator installed. It reads `N nodes not shown: read a node to list all its children.`
   (`node` for one).
 - **Dates** (`modified`) use the process's local time zone. The agent sets `TZ` for the processes
-  it starts.
+  it starts. Where D29–D31 say `AGENT_TIMEZONE`, read the local zone. The binary embeds zone data
+  (`time/tzdata`), so `TZ` names work in images without zone files.
 
 ## III.3 Results, errors and exit codes
 
@@ -1840,6 +1850,14 @@ A/B work (D24) is reached by running with a different `AGENT_STATE_DIR`.
 - **Guidance.** `init` writes `memory/protocol/usage.md`. To use it, the operator places it, for
   example as a `prompt/` fragment. Nothing gates it on the tools any more. The operator who chooses
   the tools also chooses the guidance.
+
+**Known gaps, recorded not fixed** (CLI1 acceptance, 2026-11-18):
+- A `memory/` that exists without `notes/` loops: `read` says "run agent-memory init", and `init`
+  (D19's directory contract) says nothing was needed. The operator must fix it by hand.
+- Concurrent `init`s on a fresh directory can each report `seeded="true"`. The store is still seeded
+  exactly once and correctly.
+- Nodes the loader skips do not appear in `read`, and nothing reports them: Part III has no channel
+  for `Store.Problems()`.
 
 ## III.5 Not in the CLI
 
