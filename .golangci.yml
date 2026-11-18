@@ -1,0 +1,56 @@
+version: "2"
+run:
+  issues-exit-code: 1
+  tests: true
+linters:
+  enable:
+    - bodyclose
+    - dupl
+    - gochecknoinits
+    - goconst
+    - gocyclo
+    - goprintffuncname
+    - gosec
+    - misspell
+    - mnd
+    - nakedret
+    - prealloc
+    - staticcheck
+    - unconvert
+    - unparam
+    - whitespace
+  settings:
+    dupl:
+      threshold: 100
+    goconst:
+      min-len: 2
+      min-occurrences: 2
+    gocyclo:
+      min-complexity: 10
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - dupl
+          - goconst
+          - mnd
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
