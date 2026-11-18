@@ -1,4 +1,4 @@
-This repo is agent-memory: a long-term memory store for an AI agent, kept as a tree of markdown notes with YAML frontmatter. It is being turned into a standalone `agent-memory` CLI. An agent uses it through shell tools, and the operator decides where its index goes (a tool, a livecontext entry, the system prompt). The agent does not know memory exists; it sees only tool files.
+This repo is agent-memory: a long-term memory store for an AI agent, kept as a tree of markdown notes with YAML frontmatter. It is used as a standalone CLI, `memory`. An agent uses it through shell tools, and the operator decides where its index goes (a tool, a livecontext entry, the system prompt). The agent does not know memory exists; it sees only tool files.
 
 Its precedent is `adulting` (`github.com/riazarbi/adulting`): commands exposed as argv shell tools with rich descriptions, seeded into the agent's `tools/` by whoever deploys it.
 

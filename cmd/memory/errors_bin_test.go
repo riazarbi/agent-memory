@@ -102,7 +102,7 @@ func TestReadArgumentErrors(t *testing.T) {
 // A store without notes/ gives the corrective error for read, and creates
 // nothing: no notes/, no lock file, no memory/ or state dir.
 func TestReadWithoutNotes(t *testing.T) {
-	const want = "memory has no notes/ folder; run agent-memory init"
+	const want = "memory has no notes/ folder; run memory init"
 	t.Run("memory/ without notes/", func(t *testing.T) {
 		dir := t.TempDir()
 		store := filepath.Join(dir, ".agent", "memory")
@@ -156,7 +156,7 @@ func TestUsage(t *testing.T) {
 		if r.code != 1 || r.stdout != "" {
 			t.Errorf("%v: exit %d, stdout %q; want 1 and empty", args, r.code, r.stdout)
 		}
-		if !strings.Contains(r.stderr, "usage: agent-memory") || !strings.Contains(r.stderr, "init") || !strings.Contains(r.stderr, "read [STEM]") {
+		if !strings.Contains(r.stderr, "usage: memory") || !strings.Contains(r.stderr, "init") || !strings.Contains(r.stderr, "read [STEM]") {
 			t.Errorf("%v: stderr %q is not the usage text", args, r.stderr)
 		}
 	}

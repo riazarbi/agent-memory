@@ -161,7 +161,7 @@ func TestIndexEmpty(t *testing.T) {
 // Part III.3: a store without notes/ gets the corrective error, exit 1, and
 // nothing is created.
 func TestIndexWithoutNotes(t *testing.T) {
-	const want = "memory has no notes/ folder; run agent-memory init"
+	const want = "memory has no notes/ folder; run memory init"
 	dir := t.TempDir()
 	state := filepath.Join(dir, ".agent")
 	writeFile(t, filepath.Join(state, "memory", "protocol", "usage.md"), "guidance\n")

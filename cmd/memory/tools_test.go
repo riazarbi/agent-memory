@@ -102,7 +102,7 @@ func loadTool(t *testing.T, path string) shellTool {
 var flagMention = regexp.MustCompile(`--[a-z][a-z0-9-]*`)
 
 // Acceptance criterion 3: each shipped tool file parses with the six schema
-// keys, runs agent-memory with its verb prepended, has the right read_only
+// keys, runs memory with its verb prepended, has the right read_only
 // and allow_user_args, and its description names exactly its verb's flags.
 func TestToolFilesSchema(t *testing.T) {
 	dir := filepath.Join(repoRoot(t), "tools")
@@ -118,7 +118,7 @@ func TestToolFilesSchema(t *testing.T) {
 
 	for file, verb := range shippedTools {
 		tool := loadTool(t, filepath.Join(dir, file))
-		check(t, file+" command", tool.Command, "agent-memory")
+		check(t, file+" command", tool.Command, "memory")
 		check(t, file+" prepend_args", tool.PrependArgs, []string{verb})
 		if strings.TrimSpace(tool.Description) == "" {
 			t.Errorf("%s: empty description", file)

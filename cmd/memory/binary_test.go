@@ -1,6 +1,6 @@
 package main
 
-// Tests that run the built agent-memory binary, each in a fresh temp
+// Tests that run the built memory binary, each in a fresh temp
 // directory as its working directory, with a controlled environment.
 
 import (
@@ -16,7 +16,7 @@ import (
 	"testing"
 )
 
-// binPath is the agent-memory binary built once for the whole package.
+// binPath is the memory binary built once for the whole package.
 var binPath string
 
 func TestMain(m *testing.M) {
@@ -24,16 +24,16 @@ func TestMain(m *testing.M) {
 }
 
 func buildAndRun(m *testing.M) int {
-	dir, err := os.MkdirTemp("", "agent-memory-bin-")
+	dir, err := os.MkdirTemp("", "memory-bin-")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
-	binPath = filepath.Join(dir, "agent-memory")
+	binPath = filepath.Join(dir, "memory")
 	build := exec.Command("go", "build", "-o", binPath, ".")
 	if out, err := build.CombinedOutput(); err != nil {
-		fmt.Fprintf(os.Stderr, "building agent-memory: %v\n%s", err, out)
+		fmt.Fprintf(os.Stderr, "building memory: %v\n%s", err, out)
 		return 1
 	}
 	return m.Run()
@@ -70,7 +70,7 @@ func runBin(t *testing.T, dir string, env map[string]string, args ...string) res
 	if err != nil {
 		var exit *exec.ExitError
 		if !errors.As(err, &exit) {
-			t.Fatalf("running agent-memory %v: %v", args, err)
+			t.Fatalf("running memory %v: %v", args, err)
 		}
 		code = exit.ExitCode()
 	}

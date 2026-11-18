@@ -321,7 +321,7 @@ func TestSearchErrors(t *testing.T) {
 // Acceptance criterion 7 for search: without notes/, Part III.3's message
 // and exit 1, creating nothing.
 func TestSearchWithoutNotes(t *testing.T) {
-	const want = "memory has no notes/ folder; run agent-memory init"
+	const want = "memory has no notes/ folder; run memory init"
 	dir := t.TempDir()
 	state := filepath.Join(dir, ".agent")
 	writeFile(t, filepath.Join(state, "memory", "protocol", "usage.md"), "guidance\n")

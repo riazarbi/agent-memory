@@ -3,6 +3,29 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-18 - The CLI's command is `memory`
+
+- The binary is renamed from `agent-memory` to `memory`. It is usable
+  without an agent, as a notes tool over an Obsidian-compatible vault, so a
+  plain name fits. The repo and Go module stay `agent-memory`.
+  - `cmd/agent-memory/` moves to `cmd/memory/`.
+  - The four `tools/*.json` files run `"command": "memory"`.
+  - `scripts/release/build-binaries.sh` publishes
+    `memory_<tag>_<os>_<arch>.tar.gz`.
+  - Two error messages and the usage text now name `memory`.
+  - README, spec Part III and D32, `CLAUDE.md`, `.gitignore` and the `ci.yml`
+    comment follow.
+- The model never sees the binary name: it calls the tools by their tool
+  names, and none of the descriptions mention it. Only the "run memory
+  init" and "quote it: memory search …" errors reach it, and both read
+  naturally.
+- Considered and kept: `agent-memory`, for being unambiguous on PATH.
+  Nothing called `memory` was found on the operator's machine.
+- A mechanical rename, done by the delivery lead with no behaviour change.
+  The full gate passed, and an end-to-end run with the real agent and the
+  renamed tool files loaded all four tools and answered `memory_read` from
+  the store.
+
 ## 2026-11-18 - `agent-memory index` prints the index, the repo ships the four shell-tool files and a wiring guide, and every merge to `main` publishes binaries
 
 - `cmd/agent-memory/index.go` (new): `index` prints D30's `<memory_index>` with `encoding/xml` `MarshalIndent`: the hardcoded trust line as leading character data, the first-level nodes sorted by stem, each with its children (store order) as `read` renders child entries (`tags`, the true `children` count, `modified` in the local zone), then `<omitted>` when the budget dropped entries, then `<tags>`: the top 50 by node count, ties by name (read's root list stays uncapped). No path appears. A `notes/` holding no loadable node prints nothing and exits 0 (no first-level node means no node). A missing `notes/` is Part III.3's error, exit 1, as for `read`: D30's "section without an index" has no CLI equivalent, and an operator wiring a live-context entry to an uninitialised store should hear about it. Arguments are refused before the store is looked at.

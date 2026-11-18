@@ -102,7 +102,7 @@ func checkReleaseJob(t *testing.T, rel ciJob) {
 }
 
 // Acceptance criterion 5: build-binaries.sh, run locally into a temp dir,
-// produces agent-memory_<tag>_<os>_<arch>.tar.gz for the four targets,
+// produces memory_<tag>_<os>_<arch>.tar.gz for the four targets,
 // each holding that platform's binary, and a checksums.txt that matches.
 func TestBuildBinaries(t *testing.T) {
 	root := repoRoot(t)
@@ -131,7 +131,7 @@ func TestBuildBinaries(t *testing.T) {
 	want := make([]string, 0, len(targets)+1)
 	want = append(want, "checksums.txt")
 	for target := range targets {
-		want = append(want, "agent-memory_"+tag+"_"+target+".tar.gz")
+		want = append(want, "memory_"+tag+"_"+target+".tar.gz")
 	}
 	sort.Strings(want)
 	check(t, "files", names, want)
@@ -139,7 +139,7 @@ func TestBuildBinaries(t *testing.T) {
 	sums := readChecksums(t, filepath.Join(out, "checksums.txt"))
 	check(t, "checksums.txt entries", len(sums), len(targets))
 	for target, checkBin := range targets {
-		name := "agent-memory_" + tag + "_" + target
+		name := "memory_" + tag + "_" + target
 		archive := filepath.Join(out, name+".tar.gz")
 		data, err := os.ReadFile(archive)
 		if err != nil {
@@ -147,7 +147,7 @@ func TestBuildBinaries(t *testing.T) {
 		}
 		sum := sha256.Sum256(data)
 		check(t, name+" checksum", sums[name+".tar.gz"], hex.EncodeToString(sum[:]))
-		checkBin(t, untar(t, archive, name+"/agent-memory"))
+		checkBin(t, untar(t, archive, name+"/memory"))
 	}
 }
 

@@ -234,7 +234,7 @@ func TestWriteErrorsNameArguments(t *testing.T) {
 // Acceptance criterion 7 for write: without notes/, write prints Part
 // III.3's message, exits 1 and creates nothing.
 func TestWriteWithoutNotes(t *testing.T) {
-	const want = "memory has no notes/ folder; run agent-memory init"
+	const want = "memory has no notes/ folder; run memory init"
 	args := []string{"write", "kettle-descaling", "--parent", "topics", "--description", "D", "--add", "x"}
 	t.Run("memory/ without notes/", func(t *testing.T) {
 		dir := t.TempDir()

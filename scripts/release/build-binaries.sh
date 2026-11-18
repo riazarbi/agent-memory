@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Cross-compile static agent-memory binaries for each release target into OUT_DIR as
-# agent-memory_<tag>_<os>_<arch>.tar.gz, plus a checksums.txt.
+# Cross-compile static memory binaries for each release target into OUT_DIR as
+# memory_<tag>_<os>_<arch>.tar.gz, plus a checksums.txt.
 #
 #   scripts/release/build-binaries.sh 20261002 dist
 set -euo pipefail
@@ -14,10 +14,10 @@ mkdir -p "$out"
 for target in "${targets[@]}"; do
     os=${target%/*}
     arch=${target#*/}
-    name="agent-memory_${tag}_${os}_${arch}"
+    name="memory_${tag}_${os}_${arch}"
     mkdir -p "$out/$name"
     CGO_ENABLED=0 GOOS=$os GOARCH=$arch \
-        go build -trimpath -ldflags='-s -w' -o "$out/$name/agent-memory" ./cmd/agent-memory
+        go build -trimpath -ldflags='-s -w' -o "$out/$name/memory" ./cmd/memory
     tar -C "$out" -czf "$out/$name.tar.gz" "$name"
     rm -rf "${out:?}/$name"
 done

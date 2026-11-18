@@ -16,7 +16,7 @@ const (
 )
 
 // errNoNotes is Part III.3's corrective error for a store without notes/.
-var errNoNotes = errors.New("memory has no notes/ folder; run agent-memory init")
+var errNoNotes = errors.New("memory has no notes/ folder; run memory init")
 
 // memoryDir is the store, <state dir>/memory (Part III.1). The state dir is
 // AGENT_STATE_DIR from the environment if set and non-empty; otherwise

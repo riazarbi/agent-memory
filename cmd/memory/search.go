@@ -53,7 +53,7 @@ func searchVerb(args []string) ([]byte, error) {
 		args = args[1:]
 	}
 	if len(args) > 1 {
-		return nil, fmt.Errorf("QUERY: search takes the query as one argument, got %d; quote it: agent-memory search '%s'", len(args), strings.Join(args, " "))
+		return nil, fmt.Errorf("QUERY: search takes the query as one argument, got %d; quote it: memory search '%s'", len(args), strings.Join(args, " "))
 	}
 	notes, err := notesDir()
 	if err != nil {

@@ -76,7 +76,7 @@ func TestReadmeWiringGuide(t *testing.T) {
 	}
 
 	mentions := map[int][]string{
-		0: {"agent-memory_<tag>_<os>_<arch>.tar.gz", "checksums.txt", "go build"},
+		0: {"memory_<tag>_<os>_<arch>.tar.gz", "checksums.txt", "go build"},
 		3: {"tools/*.json", "<state dir>/tools/"},
 		4: {"memory/protocol/usage.md"},
 	}
@@ -117,7 +117,7 @@ func checkLiveContextEntry(t *testing.T, block string) {
 	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		t.Error("the live-context block holds more than one JSON value")
 	}
-	check(t, "entry command", entry.Command, "agent-memory")
+	check(t, "entry command", entry.Command, "memory")
 	check(t, "entry args", entry.Args, []string{"index"})
 	if strings.TrimSpace(entry.Description) == "" {
 		t.Error("the live-context entry has no description")

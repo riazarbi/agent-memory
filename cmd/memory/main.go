@@ -1,4 +1,4 @@
-// Command agent-memory is an AI agent's long-term memory store, used through
+// Command memory is an AI agent's long-term memory store, used through
 // shell tools (docs/spec/agent-memory.md Part III). The store is
 // <state dir>/memory, found as the agent finds its state dir. Results are
 // XML on stdout with exit 0; an error is one line on stderr with exit 1, or
@@ -28,7 +28,7 @@ const (
 	exitRetry = 75
 )
 
-const usage = `usage: agent-memory <verb> [arguments]
+const usage = `usage: memory <verb> [arguments]
 
 verbs:
   init                                  seed the memory store if it is missing
