@@ -1,6 +1,7 @@
 # CI gates every pull request into main, and runs again on every push to main.
-# There is no release job yet; it arrives with the agent-memory CLI binary
-# (scripts/release/ is ready for it).
+# A push to main that passes every check is released: tagged YYYYMMDD (.2, .3
+# for later same-day releases), with the agent-memory binaries and the
+# CHANGELOG lines the merge added published as a GitHub Release. No image.
 name: ci
 
 on:
@@ -60,3 +61,52 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  # Cross-compiles every release target, so a PR that breaks one fails here,
+  # not at release time. The tag is a placeholder: release builds its own.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: scripts/release/build-binaries.sh ci dist
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint, test, tidy, vuln, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Every tag and the history between them: next-tag.sh reads the
+          # day's tags, and the notes diff CHANGELOG.md against the last one.
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Pick the tag and write the notes
+        id: tag
+        run: |
+          tag=$(git tag --list | scripts/release/next-tag.sh "$(date -u +%Y%m%d)")
+          # The previous release is the newest release tag behind this
+          # commit; before the first release, the notes are the whole file.
+          prev=$(git describe --tags --abbrev=0 --match '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]*' HEAD 2>/dev/null \
+            || git hash-object -t tree /dev/null)
+          git diff "$prev" HEAD -- CHANGELOG.md | scripts/release/notes.sh > "$RUNNER_TEMP/notes.md"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Build the binaries
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: scripts/release/build-binaries.sh "$TAG" dist
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        # gh creates the tag on this commit as it creates the release.
+        run: |
+          gh release create "$TAG" dist/*.tar.gz dist/checksums.txt \
+            --target "$GITHUB_SHA" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"

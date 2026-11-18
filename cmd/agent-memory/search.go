@@ -78,11 +78,7 @@ func renderSearch(query string, results []memory.Result) ([]byte, error) {
 		x.Shown = len(x.Nodes)
 		x.Omitted = nil
 		if n := x.Matched - x.Shown; n > 0 {
-			noun := "nodes"
-			if n == 1 {
-				noun = "node"
-			}
-			x.Omitted = &omittedXML{Nodes: n, Text: fmt.Sprintf("%d more %s matched: narrow the query.", n, noun)}
+			x.Omitted = &omittedXML{Nodes: n, Text: fmt.Sprintf("%d more %s matched: narrow the query.", n, nodeNoun(n))}
 		}
 		out, err := render(x)
 		// render adds a final newline, which is not part of the element.

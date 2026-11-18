@@ -40,6 +40,8 @@ verbs:
                                         --replace are its blocks, in order
   search QUERY                          search, in Obsidian search syntax (quote
                                         a query of several words)
+  index                                 the index: first-level nodes, their
+                                        children and the top tags
 
 The store is <state dir>/memory. The state dir is AGENT_STATE_DIR from the
 environment, else AGENT_STATE_DIR from ./.env, else .agent; a relative one is
@@ -55,6 +57,7 @@ func verbs() map[string]verb {
 		"read":   readVerb,
 		"write":  writeVerb,
 		"search": searchVerb,
+		"index":  indexVerb,
 	}
 }
 

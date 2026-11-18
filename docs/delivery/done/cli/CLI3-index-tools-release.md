@@ -103,3 +103,24 @@ None.
 - The agent's shell-tool loader requires a non-empty `description` and `command`. A tool with
   `allow_user_args: false` takes no arguments from the model.
 - Do not edit `CLAUDE.md`. The delivery lead updates its CI section at banking.
+
+## Post-verification notes (banked 2026-11-18)
+- **Verdict:** accepted. The independent verifier passed all five criteria.
+  - It caught 17 of 17 `index` mutants and 29 of 29 tool-file, README, CI and script mutants.
+  - Its own D30 oracle matched the binary byte for byte on 120 random stores.
+  - 11 inverted assertions each failed. There was no tampering, and scope is clean.
+  - govulncheck was refused in the room. The delivery lead ran it in the repo: no vulnerabilities.
+- **End-to-end against the real agent** (delivery lead): the real `agent` binary was installed with
+  the shipped `tools/*.json` and a live-context `index` entry, and a stub backend played the model.
+  - The agent offered `memory_index`, `memory_read`, `memory_search` and `memory_write`.
+  - The live-context index reached the model.
+  - The model's `memory_read lemon-tree` call returned the node XML from the store.
+
+  This settles the builder's concern that the files might pass the test's schema but fail the real
+  loader.
+- **Size:** `index.go` is about 103 code lines, plus small extractions in the other verbs. The rest
+  is JSON, YAML and the README.
+- **Recorded in Part III:** `index` before `init`; an unsatisfiable budget; the exit-75 sentence on
+  read-only tools; a re-run release job.
+- **Weak spots in the tests:** `TestCIReleaseJobs` doesn't check the workflow-level `on: push:
+  branches: [main]`. The README steps are checked by keyword only.

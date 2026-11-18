@@ -1841,8 +1841,9 @@ A/B work (D24) is reached by running with a different `AGENT_STATE_DIR`.
 
 ## III.4 What the operator arranges
 
-- **Tool files.** The repo ships `tools/memory_read.json`, `memory_write.json` and
-  `memory_search.json`. They are argv shell tools (`"command": "agent-memory"`, `prepend_args` the
+- **Tool files.** The repo ships `tools/memory_read.json`, `memory_write.json`,
+  `memory_search.json` and `memory_index.json` (index takes no model arguments:
+  `allow_user_args: false`). They are argv shell tools (`"command": "agent-memory"`, `prepend_args` the
   verb), and their descriptions are D29's and D31's, adapted to flags. Installing a file is the
   grant (D13). Leaving one out removes that capability.
 - **The index.** `agent-memory index` goes wherever the operator wants it: a livecontext entry (seen
@@ -1864,6 +1865,16 @@ A/B work (D24) is reached by running with a different `AGENT_STATE_DIR`.
   '[key:value]'`.
 - (CLI2) `search` takes its query as one verbatim argument, so a query starting with `-` is a
   query, not a flag. A leading `--` is dropped.
+
+- (CLI3) `index` on a store without `notes/` gives Part III.3's error (exit 1), like the other
+  verbs. As a livecontext entry before `init`, it shows that error on every input. Run `init`
+  first.
+- (CLI3) If the trust line, the notice and `<tags>` alone exceed the budget (50 very long tags),
+  `index` drops every entry and prints the result over budget.
+- (CLI3) All four tool descriptions say exit 75 means "run again", though only `write` can return
+  it.
+- (CLI3) Re-running the release job on an already-released commit publishes a `.2` release with
+  empty notes.
 
 ## III.5 Not in the CLI
 

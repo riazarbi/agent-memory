@@ -50,8 +50,9 @@ func (wa *writeArgs) block(arg blockArg, edit memory.BlockEdit) {
 	wa.req.Blocks = append(wa.req.Blocks, edit)
 }
 
-func parseWriteArgs(args []string) (writeArgs, error) {
-	var wa writeArgs
+// writeFlags is write's flag set, writing into wa. The shipped tool file's
+// description must name every flag in it (tools_test.go).
+func writeFlags(wa *writeArgs) *flag.FlagSet {
 	var tags []string
 	flags := flag.NewFlagSet("write", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -82,7 +83,12 @@ func parseWriteArgs(args []string) (writeArgs, error) {
 		wa.block(blockArg{flag: flagReplace, id: id}, memory.BlockEdit{ID: id, Text: text})
 		return nil
 	})
-	pos, typed, err := parseArgs(flags, args)
+	return flags
+}
+
+func parseWriteArgs(args []string) (writeArgs, error) {
+	var wa writeArgs
+	pos, typed, err := parseArgs(writeFlags(&wa), args)
 	if err != nil {
 		return wa, err
 	}

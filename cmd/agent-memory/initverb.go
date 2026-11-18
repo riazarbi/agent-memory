@@ -27,14 +27,8 @@ type initXML struct {
 // (Part III.2, D19). Once memory/ exists — even empty, even without
 // usage.md — it is never touched.
 func initVerb(args []string) ([]byte, error) {
-	flags := flag.NewFlagSet("init", flag.ContinueOnError)
-	flags.SetOutput(io.Discard)
-	pos, _, err := parseArgs(flags, args)
-	if err != nil {
+	if err := noArgs("init", args); err != nil {
 		return nil, err
-	}
-	if len(pos) > 0 {
-		return nil, fmt.Errorf("init takes no arguments, got %q", pos[0])
 	}
 	dir, err := memoryDir()
 	if err != nil {
@@ -56,6 +50,21 @@ func initVerb(args []string) ([]byte, error) {
 		return nil, err
 	}
 	return render(initXML{Store: dir, Seeded: true, Created: created})
+}
+
+// noArgs refuses any argument to a verb that takes none; a lone -- (the
+// end of flags) is allowed.
+func noArgs(verb string, args []string) error {
+	flags := flag.NewFlagSet(verb, flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	pos, _, err := parseArgs(flags, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) > 0 {
+		return fmt.Errorf("%s takes no arguments, got %q", verb, pos[0])
+	}
+	return nil
 }
 
 // filesUnder lists the regular files under root, slash-separated and

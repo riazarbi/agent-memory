@@ -5,7 +5,7 @@ Its precedent is `adulting` (`github.com/riazarbi/adulting`): commands exposed a
 ## Where this came from
 The library `internal/memory` was built inside the agent repo (`github.com/riazarbi/agent`, branch `memory`, commit `476f7da`), where memory was a set of agent built-ins. It was moved here unchanged. The agent-side adapters (`memory_read`, `memory_write`, `memory_search`, the `<memory_index>` renderer, the memory smokes) were left behind on that branch. Read them there as reference; do not copy them in, because they import agent packages.
 
-`docs/spec/agent-memory.md` still describes memory as agent built-ins: the tool gate, system-prompt injection, `memory.*` agent events, seeding into the state dir. The file format, read model, encoder, writer and search rules in it hold unchanged. The integration parts get revised for the CLI before the CLI is built.
+`docs/spec/agent-memory.md` Part III (D32) describes the CLI and overrides Part II's agent-specific parts (tool gate, system-prompt injection, `memory.*` events, seeding in `agent.New`, built-in markers).
 
 ## Workflow
 - Familiarise yourself with the codebase. Be able to answer the question, "what is this, and how does it work?"
@@ -22,7 +22,7 @@ Every commit carries a `CHANGELOG.md` entry, written before the work is handed o
 - One entry per unit of work. If the work grows before it is committed, extend its entry rather than adding a second.
 
 ## CI
-`.github/workflows/ci.yml` runs `lint`, `test`, `tidy` and `vuln` on every PR into `main` and every push to `main`. There is no release job yet: it arrives with the CLI binary (`scripts/release/` is ready for it).
+`.github/workflows/ci.yml` runs `lint`, `test`, `tidy`, `vuln` and `build` (cross-compiles every release target) on every PR into `main` and every push to `main`. A push to `main` that passes all of them is released: tagged `YYYYMMDD` (`.2`, `.3` for later same-day releases), with the `agent-memory` binaries, `checksums.txt` and the CHANGELOG lines added since the previous release published as a GitHub Release. There is no Docker image.
 - The Go toolchain comes from the `toolchain` line in `go.mod`.
 
 ## Code rules

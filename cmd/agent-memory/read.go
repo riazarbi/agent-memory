@@ -80,8 +80,9 @@ type readArgs struct {
 	typed    map[string]string
 }
 
-func parseReadArgs(args []string) (readArgs, error) {
-	ra := readArgs{depth: 1}
+// readFlags is read's flag set, writing into ra. The shipped tool file's
+// description must name every flag in it (tools_test.go).
+func readFlags(ra *readArgs) *flag.FlagSet {
 	flags := flag.NewFlagSet("read", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.StringVar(&ra.block, "block", "", "")
@@ -93,7 +94,12 @@ func parseReadArgs(args []string) (readArgs, error) {
 		ra.depth = n
 		return nil
 	})
-	pos, typed, err := parseArgs(flags, args)
+	return flags
+}
+
+func parseReadArgs(args []string) (readArgs, error) {
+	ra := readArgs{depth: 1}
+	pos, typed, err := parseArgs(readFlags(&ra), args)
 	if err != nil {
 		return ra, err
 	}
@@ -206,17 +212,23 @@ func entriesOf(nodes []*memory.Node, depth int) []entryXML {
 	}
 	out := make([]entryXML, 0, len(nodes))
 	for _, c := range nodes {
-		kids := c.Children()
-		out = append(out, entryXML{
-			Stem:        c.Stem,
-			Tags:        strings.Join(c.Tags, ","),
-			Children:    len(kids),
-			Modified:    c.Modified.Local().Format(dateLayout),
-			Description: c.Description,
-			Nodes:       entriesOf(kids, depth-1),
-		})
+		e := childEntry(c)
+		e.Nodes = entriesOf(c.Children(), depth-1)
+		out = append(out, e)
 	}
 	return out
+}
+
+// childEntry is n's child entry without nested entries: stem, tags, its
+// true child count, date and description.
+func childEntry(n *memory.Node) entryXML {
+	return entryXML{
+		Stem:        n.Stem,
+		Tags:        strings.Join(n.Tags, ","),
+		Children:    len(n.Children()),
+		Modified:    n.Modified.Local().Format(dateLayout),
+		Description: n.Description,
+	}
 }
 
 func edgesOf(edges []memory.Edge) *linksXML {
@@ -244,6 +256,11 @@ func refsOf(refs []memory.Ref) *linksXML {
 // rootOf reads the root: its children are the first-level nodes, so depth
 // applies to them as to any node's children.
 func rootOf(st *memory.Store, depth int) rootXML {
+	return rootXML{Nodes: entriesOf(st.FirstLevel(), depth), Tags: tagVocabulary(tagCounts(st))}
+}
+
+// tagCounts counts, for each tag, the loaded nodes carrying it.
+func tagCounts(st *memory.Store) map[string]int {
 	counts := map[string]int{}
 	for _, n := range st.Nodes() {
 		seen := map[string]bool{}
@@ -254,12 +271,17 @@ func rootOf(st *memory.Store, depth int) rootXML {
 			}
 		}
 	}
-	return rootXML{Nodes: entriesOf(st.FirstLevel(), depth), Tags: tagVocabulary(counts)}
+	return counts
 }
 
 // tagVocabulary renders tag counts as name(count), most used first, ties by
 // name, separated by spaces.
 func tagVocabulary(counts map[string]int) string {
+	return strings.Join(rankedTags(counts), " ")
+}
+
+// rankedTags is each tag as name(count), most used first, ties by name.
+func rankedTags(counts map[string]int) []string {
 	names := make([]string, 0, len(counts))
 	for t := range counts {
 		names = append(names, t)
@@ -274,5 +296,5 @@ func tagVocabulary(counts map[string]int) string {
 	for _, t := range names {
 		parts = append(parts, t+"("+strconv.Itoa(counts[t])+")")
 	}
-	return strings.Join(parts, " ")
+	return parts
 }
