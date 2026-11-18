@@ -21,6 +21,7 @@ detail.
   asked `read` to show a property (D29 renders none); the builder checked
   it through the library. The spec records the JSON-tool wording left in
   writer reasons, and `search`'s verbatim query.
+- `docs/delivery/doing/CLI3-index-tools-release.md` (new; skeleton removed): five criteria covering `index`, the four shipped tool files (including `memory_index.json`), the README wiring guide and binary releases.
 ## 2026-11-18 - An `agent-memory` binary finds the agent's store, seeds it with `init`, and reads it with `read`
 
 - `cmd/agent-memory/main.go` (new): verb dispatch (`init`, `read`). No verb or an unknown verb prints usage to stderr and exits 1. A verb's result reaches stdout only on success; an error is one line on stderr (line breaks inside it become spaces) with exit 1 (Part III.3). Exit 75 is not defined yet: only `write` can be busy, and it arrives in CLI2. The binary embeds `time/tzdata`, so a `TZ` name resolves even in a container with no zone files; without it Go silently falls back to UTC and dates would be a day off for half the world.
