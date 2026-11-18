@@ -26,6 +26,8 @@ detail.
   `doing/`): independent verification passed all six criteria, caught 43
   of 46 mutants, and all 10 inverted assertions failed. Production is 660
   lines.
+- `docs/delivery/doing/CLI2-write-search.md` (new; skeleton removed):
+  seven criteria, with a target of about 250 production lines.
 ## 2026-11-18 - The spec says how memory works as the agent-memory CLI, and its first milestone is planned
 
 - `docs/spec/agent-memory.md`: Part III and D32 (the operator's rulings).
