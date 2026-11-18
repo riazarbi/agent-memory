@@ -1,26 +1,31 @@
 // Command agent-memory is an AI agent's long-term memory store, used through
 // shell tools (docs/spec/agent-memory.md Part III). The store is
 // <state dir>/memory, found as the agent finds its state dir. Results are
-// XML on stdout with exit 0; an error is one line on stderr with exit 1.
-// It never logs.
+// XML on stdout with exit 0; an error is one line on stderr with exit 1, or
+// exit 75 when retrying can succeed (busy, changed on disk). It never logs.
 package main
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/riazarbi/agent-memory/internal/memory"
 
 	// Embedded zone data, so TZ names resolve where the system has none
 	// (a minimal container): dates follow the process's zone (Part III.2).
 	_ "time/tzdata"
 )
 
-// Exit codes (Part III.3). 75 (retry) arrives with write.
+// Exit codes (Part III.3).
 const (
 	exitOK    = 0
 	exitError = 1
+	// exitRetry is EX_TEMPFAIL: the same call can succeed if made again.
+	exitRetry = 75
 )
 
 const usage = `usage: agent-memory <verb> [arguments]
@@ -29,6 +34,12 @@ verbs:
   init                                  seed the memory store if it is missing
   read [STEM] [--block ID] [--depth N]  read a node (depth defaults to 1), or
                                         with no STEM the first-level nodes and tags
+  write STEM [--parent P] [--description D] [--tag T]... [--property K=V]...
+        [--add TEXT]... [--replace ID=TEXT]...
+                                        create or update a node; --add and
+                                        --replace are its blocks, in order
+  search QUERY                          search, in Obsidian search syntax (quote
+                                        a query of several words)
 
 The store is <state dir>/memory. The state dir is AGENT_STATE_DIR from the
 environment, else AGENT_STATE_DIR from ./.env, else .agent; a relative one is
@@ -40,8 +51,10 @@ type verb func(args []string) ([]byte, error)
 
 func verbs() map[string]verb {
 	return map[string]verb{
-		"init": initVerb,
-		"read": readVerb,
+		"init":   initVerb,
+		"read":   readVerb,
+		"write":  writeVerb,
+		"search": searchVerb,
 	}
 }
 
@@ -64,6 +77,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	out, err := v(args[1:])
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, oneLine(err.Error()))
+		if errors.Is(err, memory.ErrBusy) || errors.Is(err, memory.ErrChangedOnDisk) {
+			return exitRetry
+		}
 		return exitError
 	}
 	_, _ = stdout.Write(out)

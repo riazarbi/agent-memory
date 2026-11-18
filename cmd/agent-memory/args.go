@@ -6,6 +6,9 @@ import (
 	"strings"
 )
 
+// endOfFlags ends the flags: every argument after it is positional.
+const endOfFlags = "--"
+
 // parseArgs parses args against fs, with flags and positionals in any order
 // (read STEM --depth 2 and read --depth 2 STEM alike). Go's fs.Parse stops at
 // the first positional, so this walks the arguments itself and uses fs only
@@ -24,7 +27,7 @@ func parseArgs(fs *flag.FlagSet, args []string) (positional []string, typed map[
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
-		case arg == "--":
+		case arg == endOfFlags:
 			return append(positional, args[i+1:]...), typed, nil
 		case len(arg) < 2 || arg[0] != '-':
 			positional = append(positional, arg)

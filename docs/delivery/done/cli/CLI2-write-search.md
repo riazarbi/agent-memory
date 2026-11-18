@@ -101,3 +101,19 @@ Every case runs the built binary on a store seeded with `init`, in a fresh temp 
   exposes before matching on message text.
 - D28's lock waits a bounded 10 s before "busy". A test that waits it out is acceptable. If the
   library offers a test seam for the wait, use it.
+
+## Post-verification notes (banked 2026-11-18)
+- **Verdict:** accepted. The independent verifier passed all seven criteria live.
+  - It caught 21 of 22 mutants, and 11 inverted assertions each failed.
+  - The gate is green, including govulncheck run outside the clean room. There was no tampering,
+    and scope is clean.
+- **Size:** about 326 production lines (`write.go` 177, `search.go` 124, `main.go` +21, `args.go`
+  +4), against the ~250 target.
+- **My criterion error:** AC1's "`read` then shows … `status`" is impossible, because D29's read
+  renders no properties. Verified through the library and `search '[status:active]'`.
+- **Surviving mutant:** the byte budget ignoring the `<omitted>` notice's own bytes. The code does
+  count it; no test pins it.
+- **Accepted test costs:** the busy test waits out the real 10 s lock wait. The changed-on-disk test
+  is a bounded race (40 of 40 verifier runs gave exit 75), because the library's hooks are
+  unexported.
+- **Recorded in Part III:** the JSON-tool wording left in writer reasons; `search`'s verbatim query.

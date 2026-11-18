@@ -1858,6 +1858,12 @@ A/B work (D24) is reached by running with a different `AGENT_STATE_DIR`.
   exactly once and correctly.
 - Nodes the loader skips do not appear in `read`, and nothing reports them: Part III has no channel
   for `Store.Problems()`.
+- (CLI2) Some of the writer's reason texts keep the JSON tool's wording ("omit the id to add a new
+  block", "give it as the tags field"). The CLI translates only the argument names. `read` renders
+  no properties (D29), so a property is visible only in the file or through `search
+  '[key:value]'`.
+- (CLI2) `search` takes its query as one verbatim argument, so a query starting with `-` is a
+  query, not a flag. A leading `--` is dropped.
 
 ## III.5 Not in the CLI
 
