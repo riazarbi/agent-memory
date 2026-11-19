@@ -32,7 +32,8 @@ const (
 const usage = `usage: memory [--parent-dir DIR] <verb> [arguments]
 
 verbs:
-  init                                  seed the memory store if it is missing
+  init                                  if memory/ is missing, create memory/notes/
+                                        with the first-level nodes; nothing else
   read [STEM] [--block ID] [--depth N]  read a node (depth defaults to 1), or
                                         with no STEM the first-level nodes and tags
   write STEM [--parent P] [--description D] [--tag T]... [--property K=V]...

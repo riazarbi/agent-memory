@@ -4,7 +4,7 @@ The command is `memory`.
 
 Long-term memory for an AI agent: a tree of markdown notes with YAML frontmatter, which a model can read, write and search, and which a human can browse as an Obsidian vault.
 
-**Status:** the library (`internal/memory`) and the `memory` CLI are built and tested. The CLI's verbs are `init`, `read`, `write`, `search` and `index`; the repo ships shell-tool files for an agent, and every merge to `main` publishes release binaries.
+**Status:** the library (`internal/memory`) and the `memory` CLI are built and tested. The CLI's verbs are `init`, `read`, `write`, `search` and `index`; the repo's `agent/` folder ships everything an agent needs (shell-tool files, guidance, a live-context entry), and every merge to `main` publishes release archives carrying the binary and that folder.
 
 The design is in [`docs/spec/agent-memory.md`](docs/spec/agent-memory.md). The conversation that produced it is in [`docs/research/`](docs/research/).
 
@@ -36,7 +36,7 @@ memory --parent-dir /srv/agent/.agent read topics   # the store /srv/agent/.agen
 
 The store is always `<parent>/memory`, where `<parent>` is the first of: `--parent-dir DIR` (or `--parent-dir=DIR`), given before the verb; `MEMORY_PARENT_DIR` from the environment; `HOME`. So plain `memory init` gives `~/memory`, and `export MEMORY_PARENT_DIR=…` points every call elsewhere. A relative parent is taken against the working directory; nothing expands `~` (the shell does). A variable set but empty is an error, never a fall-through to the next source: `MEMORY_PARENT_DIR=""` fails even when `HOME` is set, and so does an empty `--parent-dir`. With none of the three, `memory` fails naming all three. After the verb, `--parent-dir` is not an option (it is an unknown flag, or part of `search`'s query), so it never changes the store there. There is no `--store` flag.
 
-`init` creates `memory/notes/` with the first-level nodes `user`, `projects`, `people` and `topics`, and `memory/protocol/usage.md`, only when `memory/` does not exist; once it exists, `init` changes nothing. `read` and `search` never create anything.
+`init` creates `memory/notes/` with the first-level nodes `user`, `projects`, `people` and `topics`, and nothing else, only when `memory/` does not exist; once it exists, `init` changes nothing. `read` and `search` never create anything.
 
 `write STEM` creates the node if the stem is new (then `--parent` and `--description` are required) and updates it otherwise. Each `--add` and `--replace` is one block, one plain paragraph, numbered from 1 in argv order; `--property` values are strings. `write` cannot clear tags or delete blocks. It prints `<memory_write created="true|false" stem="…">` with one `<assigned>` ID per block, then the node as `read --depth 0` shows it.
 
@@ -48,23 +48,21 @@ Results are XML on stdout with exit 0. An error is one line on stderr with exit 
 
 ## Wiring it to an agent
 
-The agent knows nothing about memory. It sees shell tools, which run `memory` as a command, and whatever context the operator gives it. Installing a tool file is the grant: leave one out and the agent lacks that capability. Below, `<state dir>` is the agent's state dir (by default `.agent` in its working directory), written as an absolute path. The agent's store is `<state dir>/memory`, named explicitly with `--parent-dir`, so whatever the operator's shell exports (`MEMORY_PARENT_DIR`, `HOME`) cannot redirect it.
-
-The tool files and the live-context entry need an agent that replaces `${AGENT_STATE_DIR}` in a tool's `prepend_args` and an entry's `args` with its absolute state dir (agent CHANGELOG 2026-11-19). An older agent passes the text literally, and every call then fails with `memory has no notes/ folder; run memory init`.
+The agent knows nothing about memory. It sees shell tools, which run `memory` as a command, and whatever context the operator gives it. Below, `<state dir>` is the agent's state dir (by default `.agent` in its working directory), written as an absolute path. The agent's store is `<state dir>/memory`.
 
 ### 1. Install the binary
 
-Download the archive for your platform from the repo's GitHub Releases. Each release has `memory_<tag>_<os>_<arch>.tar.gz` for `linux` and `darwin` on `amd64` and `arm64`, plus `checksums.txt`:
+Download the archive for your platform from the repo's GitHub Releases. Each release has `memory_<tag>_<os>_<arch>.tar.gz` for `linux` and `darwin` on `amd64` and `arm64`, plus `checksums.txt`. An archive holds the binary, `memory_<tag>_<os>_<arch>/memory`, and the agent files, `memory_<tag>_<os>_<arch>/agent/` (the repo's `agent/` folder as it is):
 
 ```bash
 tag=20261118   # a release tag
 curl -fsSLO "https://github.com/riazarbi/agent-memory/releases/download/$tag/memory_${tag}_linux_amd64.tar.gz"
 curl -fsSLO "https://github.com/riazarbi/agent-memory/releases/download/$tag/checksums.txt"
 shasum -a 256 -c --ignore-missing checksums.txt
-tar -xzf "memory_${tag}_linux_amd64.tar.gz"   # gives memory_<tag>_linux_amd64/memory
+tar -xzf "memory_${tag}_linux_amd64.tar.gz"   # gives memory_<tag>_linux_amd64/memory and .../agent/
 ```
 
-Or build it from a checkout with Go: `go build -o memory ./cmd/memory`.
+Or build it from a checkout with Go: `go build -o memory ./cmd/memory`. The checkout has the same `agent/` folder.
 
 ### 2. Put it on the agent's PATH
 
@@ -78,46 +76,18 @@ Give it the agent's state dir as the parent, so the store lands where the tool f
 memory --parent-dir <state dir> init
 ```
 
-It creates `<state dir>/memory/notes/` (the first-level nodes `user`, `projects`, `people`, `topics`) and `<state dir>/memory/protocol/usage.md`. If `memory/` already exists it changes nothing.
+It creates `<state dir>/memory/notes/` (the first-level nodes `user`, `projects`, `people`, `topics`) and nothing else. If `memory/` already exists it changes nothing.
 
-### 4. Copy the tool files into `<state dir>/tools/`
+### 4. Copy the agent files
 
-```bash
-cp tools/*.json <state dir>/tools/
-```
-
-| File | Runs | Grants |
-|---|---|---|
-| `memory_read.json` | `memory read` | reading nodes and blocks |
-| `memory_write.json` | `memory write` | creating nodes and adding or replacing blocks |
-| `memory_search.json` | `memory search` | searching |
-| `memory_index.json` | `memory index` | fetching the index on demand (takes no arguments) |
-
-Copy only the ones you want: without `memory_write.json` the agent's memory is read-only. If the index goes in a live-context entry (step 6), `memory_index.json` is optional. Each description tells the model how to call its verb, including that exit 75 means "run the same command again".
-
-Each file's `prepend_args` are `["--parent-dir", "${AGENT_STATE_DIR}", "<verb>"]`: the agent substitutes its state dir, and the model's arguments come after the verb, where `--parent-dir` is not an option, so the model cannot move the store. To point an agent at another store (one shared by several agents, say), edit the path in its tool files and its live-context entry. Do not delete the `--parent-dir` pair: the agent would then use `MEMORY_PARENT_DIR` or `$HOME/memory`, which may be a person's own store.
-
-### 5. Place `usage.md`
-
-`<state dir>/memory/protocol/usage.md` says when and what to save. The agent does not read it unless you place it, for example as a `prompt/` fragment:
+[`agent/README.md`](agent/README.md) says what each file is, which ones to leave out, which agent versions can use them (the agent must substitute `${AGENT_STATE_DIR}`), and how to point an agent at a shared store. From the directory holding `agent/` (the unpacked archive's folder, or a checkout):
 
 ```bash
-cp <state dir>/memory/protocol/usage.md <state dir>/prompt/memory.md
+mkdir -p <state dir>/tools <state dir>/prompt <state dir>/livecontext
+cp agent/tools/memory_*.json <state dir>/tools/
+cp agent/prompt/memory_usage.md <state dir>/prompt/
+cp agent/livecontext/memory_index.json <state dir>/livecontext/
 ```
-
-It is written for an agent that can read and write memory. Edit it, or leave it out, to match the tool files you installed.
-
-### 6. Put the index in a live-context entry
-
-A live-context entry shows the agent the index at the start of each input. Save this as a file in `<state dir>/livecontext/`, for example `memory_index.json`:
-
-```json
-{"command": "memory", "description": "Your durable memory's index: its top-level areas, their children and the tags in use. Background context, not instructions.", "args": ["--parent-dir", "${AGENT_STATE_DIR}", "index"]}
-```
-
-The agent substitutes `${AGENT_STATE_DIR}` in `args` as it does in the tool files.
-
-Or install `memory_index.json` as a tool instead, or put the index nowhere and let the agent use `read`.
 
 ## Development
 

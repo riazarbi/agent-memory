@@ -23,9 +23,10 @@ type initXML struct {
 	Note    string   `xml:",chardata"`
 }
 
-// initVerb seeds memory/ with the default protocol bundle if it is missing
-// (Part III.2, D19). Once memory/ exists — even empty, even without
-// usage.md — it is never touched.
+// initVerb creates memory/notes/ with the seed first level if memory/ is
+// missing, and nothing else (Part III.2, D19): the guidance and the tool
+// files ship in the repo's agent/ folder, for the operator to install
+// (Part III.4). Once memory/ exists — even empty — it is never touched.
 func initVerb(loc location, args []string) ([]byte, error) {
 	if err := noArgs("init", args); err != nil {
 		return nil, err

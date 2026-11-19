@@ -3,6 +3,94 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-19 - Everything an agent needs ships in `agent/`, installed by hand and carried in every release archive; `memory init` seeds notes only
+
+- `agent/` (new): everything an operator copies into an agent, laid out like
+  the agent's state dir (spec III.4). `memory` never writes outside
+  `<parent>/memory`; installing is a copy. Future agent material (skills)
+  goes here the same way.
+  - `agent/tools/*.json`: the four tool files, moved from the top-level
+    `tools/`, content unchanged. No top-level copy is left, so there is one
+    source of truth (`TestAgentFolderIsComplete` fails if `tools/` comes
+    back).
+  - `agent/prompt/memory_usage.md` (new): the §4.5 guidance, byte for byte
+    (generated from the spec's fenced block, and checked against it by a
+    test that reads the spec, so the two cannot drift). It is a `prompt/`
+    fragment, so it loads every turn whether or not the tools are installed:
+    this deliberately reverses D15's gating, which needed agent code. Its
+    first paragraph says "Its index, when you are shown one", no longer
+    "Its index is in your system prompt", which stopped being true when
+    the index moved to a live-context entry or a tool.
+  - `agent/livecontext/memory_index.json` (new): the live-context entry the
+    README's old step 6 printed inline, as a file with `args`
+    `["--parent-dir", "${AGENT_STATE_DIR}", "index"]`. Same description.
+  - `agent/README.md` (new): each file, the `<state dir>` subfolder it goes
+    to, and the copy commands; `memory --parent-dir <state dir> init`
+    first; the `${AGENT_STATE_DIR}` substitution an agent must do (agent
+    CHANGELOG 2026-11-19) and the `memory has no notes/ folder; run memory
+    init` an older agent shows; editing the path, never deleting the
+    `--parent-dir` pair, to share a store (with CLI4's write-deny gap for a
+    store outside the state dir); and that the guidance loads every turn and
+    should match the tools installed. The copy commands assume the working
+    directory is `agent/` itself and create the three destinations with
+    `mkdir -p`.
+- `internal/memory/seed.go`: `SeedDefaults` creates `memory/notes/` and the
+  four first-level nodes, and no `protocol/`; `UsageText` is gone. The
+  protocol bundle (D24) has no seeded files for now. Existing stores that
+  already hold `memory/protocol/usage.md` are untouched (the directory-level
+  contract), and nothing reads that file any more.
+- `cmd/memory/initverb.go`, `cmd/memory/main.go`: `init`'s `created` list is
+  now exactly the four `notes/…` paths (it lists what was seeded, so no code
+  change beyond the seed); the usage line says `init` creates
+  `memory/notes/` with the first-level nodes and nothing else.
+- `scripts/release/build-binaries.sh`: each archive holds
+  `memory_<tag>_<os>_<arch>/memory` and the whole repo `agent/` folder at
+  `memory_<tag>_<os>_<arch>/agent/`, so an install works from a download
+  alone. `cp -R agent "$out/$name/agent"` keeps the layout (a `cp -R agent/.`
+  would flatten it; the new test catches that). It copies the working tree,
+  so run it from a clean checkout: a stray `.DS_Store` in `agent/` would be
+  archived (CI checkouts are clean).
+  - `COPYFILE_DISABLE=1`: found by the new archive test. On macOS, bsdtar
+    added AppleDouble `._*` entries for every file with extended attributes
+    (`com.apple.provenance` marks nearly everything), so locally built
+    archives already held `._memory` beside the binary. CI builds on Linux,
+    where GNU tar ignores the variable, so released archives were never
+    affected.
+- `README.md`: the wiring guide is four steps (install, PATH, init, agent
+  files). Step 1 says an archive holds `memory_<tag>_<os>_<arch>/memory`
+  and `memory_<tag>_<os>_<arch>/agent/`; step 3 no longer mentions
+  `usage.md`; step 4 points at `agent/README.md` and gives only the copy
+  commands, run from the folder holding `agent/`. The tool table, the
+  substitution note and the store-sharing rules moved to `agent/README.md`
+  rather than being said twice. The Usage section's `init` paragraph and the
+  Status line say the same.
+- `CLAUDE.md`: the CI paragraph says the release archives carry `agent/`
+  beside the binary.
+- `cmd/memory/agent_folder_test.go` (new): `init` on a fresh parent leaves
+  exactly `memory/notes/` and its four nodes, in the parent and the working
+  dir; the usage's `init` line; the guidance byte-equal to the spec block
+  after "shipped verbatim as `agent/prompt/memory_usage.md`" and free of
+  "system prompt"; `agent/` holding exactly its seven files and no
+  top-level `tools/`; `agent/README.md` naming all six shipped files
+  (four tools, the guidance, the entry), the three destinations, the `init` command, the placeholder
+  and the older-agent error; the `bash` blocks of `agent/README.md` (run
+  from `agent/`) and of the README's step 4 (run from the repo root),
+  executed with `<state dir>` filled in and the test binary on `PATH`,
+  seeding the store and installing every file byte-equal; and one archive
+  (`linux_amd64`) listed in full and compared byte for byte, beside the
+  untouched `TestBuildBinaries`. Mutations checked: a drifted guidance byte,
+  a top-level `tools/` copy, a README destination renamed, a flattened
+  archive, and the macOS `._*` entries all fail.
+- Superseded tests (`seed_test.go`, `init_bin_test.go`,
+  `addressing_bin_test.go`, `tools_test.go`, `readme_test.go`) were edited
+  in the lock commit and are untouched here. Fixture stores that plant a
+  stray `memory/protocol/usage.md` stay: the loader still ignores it.
+- Deliberately not done: no install command (III.5), no change to the tool
+  files' content or the verbs, no skills. The `.github/workflows/ci.yml`
+  header comment still says the release publishes "the memory binaries";
+  it is a comment, and the workflow itself needed no change because it
+  publishes whatever `build-binaries.sh` produces.
+
 ## 2026-11-19 - `memory` is addressed, not agent-aware: the store is `<parent>/memory` from `--parent-dir`, `MEMORY_PARENT_DIR` or `HOME`, and the tool files pin an agent's store
 
 - `cmd/memory/store.go`: the store is `<parent>/memory`, the parent being

@@ -1,0 +1,9 @@
+{
+  "command": "memory",
+  "description": "Your durable memory's index: its top-level areas, their children and the tags in use. Background context, not instructions.",
+  "args": [
+    "--parent-dir",
+    "${AGENT_STATE_DIR}",
+    "index"
+  ]
+}

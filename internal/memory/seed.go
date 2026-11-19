@@ -8,44 +8,6 @@ import (
 	"path/filepath"
 )
 
-// UsageText is the default protocol's memory/protocol/usage.md, seeded
-// verbatim (docs/spec/agent-memory.md §4.5): when and what to save. How to
-// call the tools lives in their descriptions, never here.
-const UsageText = `# Memory
-
-You have a durable memory: notes that outlive this conversation, kept as a
-tree under four areas — user, projects, people, topics. Its index is in your
-system prompt. What you can do with it is exactly what your memory tools allow.
-
-## What to save
-Save a claim only if it would still matter if this conversation were cleared
-today, and you could not work it out again from files or a live lookup:
-- a correction or stated preference — and quiet confirmations that an unusual
-  approach was right, not only corrections;
-- who is doing what, why, and by when;
-- facts about people and things you deal with that you would otherwise have
-  to ask about again.
-Nobody may be watching (mailbox, watch): save what you worked out, not only
-what you were told. If you are unsure whether something is durable, it isn't.
-
-Never save: what you can re-read or re-derive; progress on the current task;
-records of finished work; secrets.
-
-## How to write it
-- One claim per block, written for a stranger: turn "today", "Thursday",
-  "this one", "the one we discussed" into dates and names.
-- For a rule, say why it holds and when it applies.
-- Mark your own interpretation as yours, not as fact.
-- Search before adding: update the existing note rather than starting a second.
-- File it under the area it belongs to, or a node you can name — don't hunt
-  for a deep location.
-
-## Before you answer
-For questions about the operator's preferences, people, or past work, check
-the index and read the relevant node first. A note can be stale: re-check
-anything it says about files or the outside world before acting on it.
-`
-
 // seedFirstLevel is the default protocol's starting ontology (D19, D29):
 // the first-level nodes, seeded with a description and no blocks.
 var seedFirstLevel = []struct{ stem, description string }{
@@ -55,12 +17,15 @@ var seedFirstLevel = []struct{ stem, description string }{
 	{"topics", "Everything else worth knowing"},
 }
 
-// SeedDefaults seeds memoryDir (memory/) with protocol/usage.md and the
-// default first level under notes/, on the directory-level contract
-// skills/ and livecontext/ use: only when memoryDir does not exist. Once
-// it exists — even empty, even a symlink — it is never touched, so a
-// deleted usage.md or first-level node stays deleted and a shipped
-// memory/ is never overwritten.
+// SeedDefaults seeds memoryDir (memory/) with notes/ holding the default
+// first level, and nothing else, on the directory-level contract skills/
+// and livecontext/ use: only when memoryDir does not exist. Once it exists
+// — even empty, even a symlink — it is never touched, so a deleted
+// first-level node stays deleted and a shipped memory/ is never
+// overwritten. The guidance is not seeded: it ships as the prompt/
+// fragment agent/prompt/memory_usage.md, installed by the operator
+// (docs/spec/agent-memory.md Part III.4), and the protocol bundle (D24)
+// has no seeded files for now.
 //
 // The tree is built in a hidden sibling directory and renamed into place,
 // so a seed that fails part-way leaves no half-seeded memory/ that would
@@ -93,16 +58,10 @@ func SeedDefaults(memoryDir string) error {
 	return nil
 }
 
-// seedTree writes the default bundle into root, which becomes memory/.
+// seedTree writes notes/ and the default first level into root, which
+// becomes memory/.
 func seedTree(root string) error {
 	if err := os.Chmod(root, folderMode); err != nil {
-		return err
-	}
-	protocol := filepath.Join(root, "protocol")
-	if err := os.Mkdir(protocol, folderMode); err != nil {
-		return err
-	}
-	if err := writeSeedFile(filepath.Join(protocol, "usage.md"), []byte(UsageText)); err != nil {
 		return err
 	}
 	notes := filepath.Join(root, "notes")

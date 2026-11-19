@@ -91,3 +91,21 @@ tests) are unaffected and stay.
 - Mostly moves and docs. Production Go should shrink (`UsageText` and the `protocol/` seeding go).
 - The README wiring guide keeps steps 1–3 and replaces 4–6 with one step pointing at
   `agent/README.md`; do not duplicate `agent/README.md`'s content there beyond the copy commands.
+
+## Post-verification notes (banked 2026-11-19)
+- **Verdict:** accepted on the first build by the delivery lead, without a separate verifier run
+  (a move-and-docs unit). The builder made each criterion's test fail on purpose (guidance byte
+  changed, top-level `tools/` left behind, a README destination renamed, a flattened archive,
+  `protocol/` still seeded). The lead's pre-filter is green; full lint 0 issues; govulncheck run by
+  the lead in the repo.
+- **Found by the build and fixed:** macOS bsdtar was adding AppleDouble `._*` entries to locally
+  built archives (CLI3's too; CI builds on Linux, so releases were unaffected).
+  `build-binaries.sh` now exports `COPYFILE_DISABLE=1`.
+- **Acted on at banking:** D19 and D29 carry a supersession note (Part II still describes the
+  seeded `usage.md`; Part III governs the CLI). An empty `tmp/` the builder left in the room was not
+  banked.
+- **Not acted on:** the remaining Part II mentions of `protocol/usage.md` (§4.2 diagram, §4.4/D30,
+  §4.5 *Seeding*, §4.6, §4.7) describe the agent-built-in design Part III overrides; stores seeded
+  before CLI5 keep an unread `protocol/usage.md` (no store was ever deployed); the copy commands
+  appear in both READMEs, each run by a test; the criterion said "five shipped paths" where there
+  are six installable files (all six are tested).
