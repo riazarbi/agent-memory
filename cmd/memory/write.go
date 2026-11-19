@@ -97,6 +97,9 @@ func parseWriteArgs(args []string) (writeArgs, error) {
 	case 0:
 		return wa, errors.New("STEM: write needs the stem of the node to create or update")
 	case 1:
+		if pos[0] == rootArg {
+			return wa, errors.New("STEM: / is the root, which has no content and cannot be written; give the stem of a node to create or update (--parent / creates a top-level node)")
+		}
 		wa.req.Stem = pos[0]
 		return wa, nil
 	default:
@@ -105,14 +108,16 @@ func parseWriteArgs(args []string) (writeArgs, error) {
 }
 
 // writeVerb is D29's memory_write: a new stem is a create, a loaded one an
-// update. Argument errors come before the store is looked at, and the
-// writer's field errors are renamed to the arguments as typed.
+// update; --parent / creates a first-level node. Argument errors come
+// before the store is looked at; then a missing store is created (Part
+// III.1), and the writer's field errors are renamed to the arguments as
+// typed.
 func writeVerb(loc location, args []string) ([]byte, error) {
 	wa, err := parseWriteArgs(args)
 	if err != nil {
 		return nil, err
 	}
-	notes, err := loc.notesDir()
+	notes, err := loc.makeNotesDir()
 	if err != nil {
 		return nil, err
 	}

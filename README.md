@@ -4,7 +4,7 @@ The command is `memory`.
 
 Long-term memory for an AI agent: a tree of markdown notes with YAML frontmatter, which a model can read, write and search, and which a human can browse as an Obsidian vault.
 
-**Status:** the library (`internal/memory`) and the `memory` CLI are built and tested. The CLI's verbs are `read`, `write`, `search` and `index`, and the first call creates the store; the repo's `agent/` folder ships everything an agent needs (shell-tool files, guidance, a live-context entry), and every merge to `main` publishes release archives carrying the binary and that folder.
+**Status:** the library (`internal/memory`) and the `memory` CLI are built and tested. The CLI's verbs are `read`, `write`, `search` and `index`; it imposes no structure, a missing store is an empty one, and only `write` creates it. The repo's `agent/` folder ships everything an agent needs (shell-tool files, guidance, a live-context entry, an optional starting tree), and every merge to `main` publishes release archives carrying the binary and that folder.
 
 The design is in [`docs/spec/agent-memory.md`](docs/spec/agent-memory.md). The conversation that produced it is in [`docs/research/`](docs/research/).
 
@@ -13,14 +13,18 @@ The design is in [`docs/spec/agent-memory.md`](docs/spec/agent-memory.md). The c
 ```bash
 go build -o memory ./cmd/memory
 
-memory read                        # the first-level nodes and every tag in use
-memory read topics                 # a node: blocks, children, links, backlinks
-memory read topics --depth 2       # children and grandchildren (--depth 0: none)
-memory read topics --block m-7f3a2k  # one block, with its own links and backlinks
+memory read                        # the root (also memory read /): the top-level nodes and every tag in use
 
+# --parent / is the root: this creates a top-level node, which an empty store needs first
+memory write household --parent / --description "Running the house"
 # create a node under an existing one: blocks in argv order, IDs assigned and returned
-memory write kettle-descaling --parent topics --description "How to descale the kettle" \
+memory write kettle-descaling --parent household --description "How to descale the kettle" \
   --tag home --tag cleaning --property status=active --add "Use citric acid." --add "Rinse twice."
+
+memory read household              # a node: blocks, children, links, backlinks
+memory read household --depth 2    # children and grandchildren (--depth 0: none)
+memory read kettle-descaling --block m-7f3a2k  # one block, with its own links and backlinks
+
 # update it: --add appends, --replace ID=TEXT rewrites a block, any --tag replaces the tags,
 # --property merges
 memory write kettle-descaling --replace m-7f3a2k="Use citric acid, 2 tbsp." --tag home
@@ -30,14 +34,16 @@ memory search 'tag:home OR [status:active]'
 
 memory index                       # <memory_index>: the top of the tree and the top tags
 
-memory --parent-dir /srv/agent/.agent read topics   # the store /srv/agent/.agent/memory
+memory --parent-dir /srv/agent/.agent read household   # the store /srv/agent/.agent/memory
 ```
 
 The store is always `<parent>/memory`, where `<parent>` is the first of: `--parent-dir DIR` (or `--parent-dir=DIR`), given before the verb; `MEMORY_PARENT_DIR` from the environment; `HOME`. So plain `memory read` gives `~/memory`, and `export MEMORY_PARENT_DIR=…` points every call elsewhere. A relative parent is taken against the working directory; nothing expands `~` (the shell does). A variable set but empty is an error, never a fall-through to the next source: `MEMORY_PARENT_DIR=""` fails even when `HOME` is set, and so does an empty `--parent-dir`. With none of the three, `memory` fails naming all three. After the verb, `--parent-dir` is not an option (it is an unknown flag, or part of `search`'s query), so it never changes the store there. There is no `--store` flag.
 
-There is no install step: the first call creates the store. Any verb, `read`, `search` and `index` included, first creates `memory/notes/` with the first-level nodes `user`, `projects`, `people` and `topics` when `notes/` is missing (and `memory/` too, if that is missing), then does its job, printing exactly what it would on a store created earlier. Nothing else is created, and anything already in `memory/` is left alone. Once `notes/` exists, even empty or missing a first-level node, nothing is added to it, so a deleted node stays deleted; deleting `notes/` resets the store. The parent must already exist: `memory` creates `memory/` inside it, never the parent itself, so a mistyped `--parent-dir` or `MEMORY_PARENT_DIR` fails instead of starting a store somewhere unexpected. Once the store exists, `read`, `search` and `index` write nothing.
+There is no install step, and `memory` seeds nothing and names no node: a missing store is an empty one. When `memory/` or `memory/notes/` does not exist, `read`, `search` and `index` behave as on an empty store (`read` prints the root with no nodes, `search` matches nothing, `index` prints nothing) and create nothing; they never write anything, store or no store, not even a lock file. Only `write` creates the store: once its arguments have passed, it creates `memory/` and `memory/notes/` (mode 0755) when they are missing, and nothing else, so a refused write can leave an empty `memory/notes/` and its lock file behind. The parent must already exist: `memory` creates `memory/` inside it, never the parent itself, so a mistyped `--parent-dir` or `MEMORY_PARENT_DIR` fails instead of starting a store somewhere unexpected.
 
-`write STEM` creates the node if the stem is new (then `--parent` and `--description` are required) and updates it otherwise. Each `--add` and `--replace` is one block, one plain paragraph, numbered from 1 in argv order; `--property` values are strings. `write` cannot clear tags or delete blocks. It prints `<memory_write created="true|false" stem="…">` with one `<assigned>` ID per block, then the node as `read --depth 0` shows it.
+The structure of a store is whatever its tree is. The root, `notes/` itself, is the one fixed node, written `/`: `read /` is the root read, and `write STEM --parent /` creates a top-level node, so on an empty store the first write is one of those. The root has no content: `write /` and `read / --block ID` are errors. No verb moves, renames or deletes a node; rearrange the tree by hand (a node is a folder holding `<folder>/<folder>.md` with a one-line `description`), in a file manager or Obsidian.
+
+`write STEM` creates the node if the stem is new (then `--parent` and `--description` are required, `--parent /` for a top-level node) and updates it otherwise (`--parent`, if given, must be the node's own, `/` for a top-level node). Each `--add` and `--replace` is one block, one plain paragraph, numbered from 1 in argv order; `--property` values are strings. `write` cannot clear tags or delete blocks. It prints `<memory_write created="true|false" stem="…">` with one `<assigned>` ID per block, then the node as `read --depth 0` shows it.
 
 `search QUERY` takes the query as one argument. It prints `<memory_search query="…" matched="N" shown="M">`: at most 20 nodes, most hit blocks first, each with at most 5 matching blocks, within 30,000 bytes, and an `<omitted>` notice for the rest.
 
@@ -76,9 +82,10 @@ mkdir -p <state dir>/tools <state dir>/prompt <state dir>/livecontext
 cp agent/tools/memory_*.json <state dir>/tools/
 cp agent/prompt/memory_usage.md <state dir>/prompt/
 cp agent/livecontext/memory_index.json <state dir>/livecontext/
+[ -e <state dir>/memory ] || cp -R agent/memory <state dir>/
 ```
 
-There is nothing to seed: the store `<state dir>/memory` appears on the agent's first memory call.
+The last line installs the optional starting tree (the top-level nodes `user`, `projects`, `people` and `topics`) only when the agent has no store yet, so it never copies into an existing store. Leave it out to start from an empty store, which the agent's first `write` creates; [`agent/README.md`](agent/README.md) says how to rearrange the tree.
 
 ## Development
 

@@ -14,6 +14,7 @@ Below, `<state dir>` is the agent's state dir (by default `.agent` in its workin
 | `tools/memory_index.json` | `<state dir>/tools/` | Shell tool running `memory index`: the index on demand (takes no arguments). |
 | `prompt/memory_usage.md` | `<state dir>/prompt/` | The guidance: when and what to save. A `prompt/` fragment, loaded every turn. |
 | `livecontext/memory_index.json` | `<state dir>/livecontext/` | A live-context entry showing the index at the start of each input. |
+| `memory/notes/` | `<state dir>/memory/notes/` | An optional starting tree: the top-level nodes `user`, `projects`, `people` and `topics`. Copied only into a store that does not exist yet. |
 | `README.md` | nowhere | This file. |
 
 ## Install
@@ -25,9 +26,10 @@ mkdir -p <state dir>/tools <state dir>/prompt <state dir>/livecontext
 cp tools/memory_*.json <state dir>/tools/
 cp prompt/memory_usage.md <state dir>/prompt/
 cp livecontext/memory_index.json <state dir>/livecontext/
+[ -e <state dir>/memory ] || cp -R memory <state dir>/
 ```
 
-That installs everything. There is nothing to seed: the store, `<state dir>/memory`, appears on the agent's first memory call, which creates `memory/notes/` with the first-level nodes `user`, `projects`, `people` and `topics`. Copy less to grant less; the sections below say what each choice means.
+That installs everything. The last line copies the starting tree only when `<state dir>/memory` does not exist, so it never touches an existing store; without it the store starts empty, and the agent's first `write` creates it (`memory` itself seeds nothing). Copy less to grant less; the sections below say what each choice means.
 
 ## The tool files
 
@@ -48,6 +50,14 @@ A store outside the agent's state dir is not covered by the agent's state-dir wr
 ## The guidance
 
 `prompt/memory_usage.md` says when and what to save. It is a `prompt/` fragment, so the agent loads it every turn, whether or not the memory tools are installed. It is written for an agent that can read and write memory, so it should match the tools you installed: install it with the tools, edit it to match (for example, take out the saving advice if you leave out `memory_write.json`), or leave it out. Guidance that tells the model to save, with no tool to save with, sends it hunting for a way to write.
+
+## The starting tree
+
+`memory/notes/` is an example, not a requirement: `memory` imposes no structure, and the store's structure is whatever its tree is. It holds four top-level nodes, each a description and no blocks, exactly as `memory write <stem> --parent / --description <D>` would create them: `user` (who the operator is and how they want work done), `projects` (ongoing efforts, goals, incidents and commitments), `people` (who is who, and how to deal with them) and `topics` (everything else worth knowing). Install it, edit it, make your own, or leave it out.
+
+To rearrange it, before or after installing, move folders around: a node is a folder holding `<folder>/<folder>.md`, whose frontmatter has a one-line `description`, so renaming, moving or deleting folders (in a file manager or Obsidian) reshapes the tree. Nothing the model reads names these nodes: the tool descriptions and the guidance send it to the index (or a root read) to learn the structure, so a different tree needs no other edit.
+
+The model can add top-level nodes (`write` with `--parent /`), but no verb moves, renames or deletes a node, so it can never remove one. If the top level sprawls, prune it by hand.
 
 ## The live-context entry
 

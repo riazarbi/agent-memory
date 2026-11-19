@@ -17,8 +17,10 @@ import (
 // stem names the node; a loaded stem is an update, any other a create.
 type WriteRequest struct {
 	Stem string
-	// Parent is the stem of the node to create under; empty means not
-	// given. An update accepts it only if it names the node's parent.
+	// Parent is the stem of the node to create under, or RootParent to
+	// create a first-level node; empty means not given. An update accepts
+	// it only if it names the node's parent (RootParent for a first-level
+	// node).
 	Parent string
 	// Description is required to create; on an update, if non-nil, it
 	// replaces the description.
@@ -57,6 +59,10 @@ var (
 	// leaves the other content in place.
 	ErrChangedOnDisk = errors.New("changed on disk — retry")
 )
+
+// RootParent is the root, notes/ itself, as a write's parent (spec III.6):
+// a create under it makes a first-level node. It is never a stem.
+const RootParent = "/"
 
 // lockName is the lock file every write holds (D28), a dot-entry so the
 // reader and Obsidian ignore it. It is never removed: removing a lock file
@@ -254,7 +260,8 @@ func wrapCommit(err error, rel, when string) error {
 	return err
 }
 
-// checkUpdateParent refuses a parent that is given and is not the node's.
+// checkUpdateParent refuses a parent that is given and is not the node's:
+// a first-level node's parent is the root, RootParent.
 func checkUpdateParent(n *Node, parent string) error {
 	if parent == "" {
 		return nil
@@ -265,12 +272,15 @@ func checkUpdateParent(n *Node, parent string) error {
 		}
 		return fieldErr("parent", "node %q already exists under %q, so this write is an update: omit parent or give %q (moving a node is not a write)", n.Stem, p.Stem, p.Stem)
 	}
-	return fieldErr("parent", "node %q already exists at the top level, so this write is an update: omit parent (moving a node is not a write); %q is not its parent", n.Stem, parent)
+	if parent == RootParent {
+		return nil
+	}
+	return fieldErr("parent", "node %q already exists at the top level, so this write is an update: omit parent or give %s (moving a node is not a write); %q is not its parent", n.Stem, RootParent, parent)
 }
 
-// create makes a new node under a loaded parent.
+// create makes a new node under a loaded parent, or under the root.
 func (w *Writer) create(st *Store, req WriteRequest) (WriteResult, error) {
-	pn, err := w.checkCreate(st, req)
+	parentPath, err := w.checkCreate(st, req)
 	if err != nil {
 		return WriteResult{}, err
 	}
@@ -282,7 +292,7 @@ func (w *Writer) create(st *Store, req WriteRequest) (WriteResult, error) {
 	if err != nil {
 		return WriteResult{}, err
 	}
-	rel := path.Join(pn.Path, req.Stem)
+	rel := path.Join(parentPath, req.Stem)
 	folder := filepath.Join(w.dir, filepath.FromSlash(rel))
 	notePath := w.notePath(rel)
 	if err := makeFolder(folder, rel); err != nil {
@@ -338,30 +348,36 @@ func makeFolder(folder, rel string) error {
 	return nil
 }
 
-// checkCreate refuses a create that cannot succeed, and returns the parent.
-func (w *Writer) checkCreate(st *Store, req WriteRequest) (*Node, error) {
+// checkCreate refuses a create that cannot succeed, and returns the
+// parent's path relative to notes/: "" for the root (RootParent), whose
+// folder is notes/ itself.
+func (w *Writer) checkCreate(st *Store, req WriteRequest) (string, error) {
 	exact, folded := w.findFolders(req.Stem)
 	if exact != "" {
-		return nil, fmt.Errorf("stem %q is taken by the folder %s, which the reader skipped (%s); fix or remove that folder first - the write cannot use the stem until then, and the folder is untouched", req.Stem, exact, problemFor(st, exact))
+		return "", fmt.Errorf("stem %q is taken by the folder %s, which the reader skipped (%s); fix or remove that folder first - the write cannot use the stem until then, and the folder is untouched", req.Stem, exact, problemFor(st, exact))
 	}
 	if folded != "" {
-		return nil, fieldErr("stem", "%q collides by letter case with the folder %s; stems are unique store-wide and a case-insensitive filesystem cannot hold both - choose another stem", req.Stem, folded)
+		return "", fieldErr("stem", "%q collides by letter case with the folder %s; stems are unique store-wide and a case-insensitive filesystem cannot hold both - choose another stem", req.Stem, folded)
 	}
 	if req.Parent == "" {
-		return nil, fieldErr("parent", "is required to create node %q: name the existing node to create it under; nodes cannot be created at the top level", req.Stem)
+		return "", fieldErr("parent", "is required to create node %q: name the existing node to create it under, or give %s to create it at the top level", req.Stem, RootParent)
 	}
-	pn, ok := st.Node(req.Parent)
-	if !ok {
-		return nil, fieldErr("parent", "no node %q exists to create %q under; give the stem of an existing node", req.Parent, req.Stem)
+	parentPath := ""
+	if req.Parent != RootParent {
+		pn, ok := st.Node(req.Parent)
+		if !ok {
+			return "", fieldErr("parent", "no node %q exists to create %q under; give the stem of an existing node, or %s for the top level", req.Parent, req.Stem, RootParent)
+		}
+		parentPath = pn.Path
 	}
 	if req.Description == nil {
-		return nil, fieldErr("description", "is required to create node %q: one line saying what the node holds", req.Stem)
+		return "", fieldErr("description", "is required to create node %q: one line saying what the node holds", req.Stem)
 	}
-	rel := path.Join(pn.Path, req.Stem)
+	rel := path.Join(parentPath, req.Stem)
 	if _, err := os.Lstat(filepath.Join(w.dir, filepath.FromSlash(rel))); err == nil {
-		return nil, fmt.Errorf("%s already exists and is not a node folder; remove it or choose another stem", rel)
+		return "", fmt.Errorf("%s already exists and is not a node folder; remove it or choose another stem", rel)
 	}
-	return pn, nil
+	return parentPath, nil
 }
 
 // folderSearch is one walk of findFolders.

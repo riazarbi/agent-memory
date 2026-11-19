@@ -1200,7 +1200,7 @@ the system prompt, never reaches `context/`.
   ```
 
   Create vs update by existence: a new stem is a create (`parent` and
-  `description` required; the parent must exist and is never the root); an
+  `description` required; the parent must exist, or be the root, `/`, for a first-level node — CLI7, III.6); an
   existing stem is an update (`parent` absent or matching). A block without
   an `id` is appended; with an `id` it replaces that block's text; there is
   no deleting (restructuring). Text containing a blank line is rejected —
@@ -1218,7 +1218,7 @@ the system prompt, never reaches `context/`.
   run headlessly. Shape settled in D31 (§4.5 *`memory_search`, exactly*);
   opt-in, not seeded.
 - **Restructuring operations** — the non-additive verbs: move, rename,
-  split, merge, delete, rename a tag, create at the root. Structure, not
+  split, merge, delete, rename a tag (creating at the root is an ordinary write since CLI7, III.6). Structure, not
   method: the harness provides them generically, every move rewrites
   inbound block links (§4.3), and a run gets them only if its protocol
   grants them (D13). Their exact shape is open (§6).
@@ -1593,7 +1593,7 @@ A **protocol** is the method layer (D23), packaged as files:
 
 The bundle lives in `memory/protocol/` beside `notes/` (decided
 2026-11-13): `usage.md` now, the dream and audit recipes later. The path is
-fixed on every install by the first seed. The state-dir
+fixed on every install by the first seed *(superseded: nothing is seeded since CLI7, III.6)*. The state-dir
 write deny already closes all of `.agent/` to the model's file tools, so
 the earlier reason to put dream recipes under the protected `timer/` no
 longer applies.
@@ -1729,7 +1729,7 @@ digests look like transcript preservation by another name.
   - **Tools:** `memory_read` returns blocks, children to depth, outlinks and
     backlinks, IDs rendered; unknown stem gives a corrective error.
     `memory_write` adds and updates blocks and creates child nodes under
-    existing nodes, never at the root, never into `usage.md`, never above
+    existing nodes or under the root (CLI7, III.6), never into `usage.md`, never above
     `notes/`; returns assigned IDs; carries unknown frontmatter properties
     and inline fields through untouched. Restructuring operations (when
     built): every move rewrites inbound block links. `memory_search` parses the
@@ -1938,8 +1938,14 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
   `--parent-dir` exists. No tool file can produce it.
 - (CLI7) The model can add first-level nodes but no verb removes, moves or renames one, so a top
   level the model has sprawled is pruned by the operator, by hand.
-- (CLI7) A `write` refused on a missing store (an unknown parent, say) still leaves an empty
+- (CLI7) A `write` refused on a missing store after its argument parsing (an unknown parent, an
+  invalid stem, an empty description or a bad tag, all checked by the writer) still leaves an empty
   `memory/notes/` and its lock file. It reads as the same empty store.
+- (CLI7) The install guard `[ -e <state dir>/memory ]` treats a dangling `memory` symlink as no
+  store, so `cp` writes through it; `memory` itself calls that symlink an error. Operator setups
+  only.
+- (CLI7 acceptance) The shipped `write` description's example contains the word "people" (in a
+  quoted description), so the "names no node" check exempts that one quoted value.
 - (CLI6 acceptance) A dangling symlink as the parent says `does not exist`.
 
 ## III.5 Not in the CLI
@@ -2041,7 +2047,7 @@ Superseded decisions keep their number; the row says what changed and why.
 | D25 | Reading the store | The read model's rules for every file it may meet — walk, stems, collisions, frontmatter types, paragraphs-only bodies, block IDs, link forms, backlinks — with errors (node or subtree skipped) and warnings (loaded, reported). §4.2 *Reading the store*. |
 | D26 | Frontmatter round-trip | Hybrid: a write changing no frontmatter field copies its bytes exactly; one that changes fields re-emits from the YAML node tree, keeping every other property's value, type, tag, order, scalar form and comments. The read model keeps raw frontmatter text and each property's YAML nodes. §4.2 *Round-trip of frontmatter*. |
 | D27 | Encoding nodes | A pure encoder: crypto-random `m-` IDs unique store-wide; a fixed layout for new nodes; byte-identical output for an unchanged node; untouched blocks keep their exact lines; frontmatter changes re-emitted per D26 (tags replace, properties merge); BOM and line ending kept; validation before output; everything emitted reads back clean. §4.2 *Encoding nodes*. |
-| D28 | Writing to disk | An exclusive OS lock (`flock` on `notes/.write.lock`, bounded 10 s wait, then "busy — retry") serializes writes across processes; one writer per `notes/` per process; each write from a fresh full load; create vs update by stem existence (create: valid unused stem, description, a loaded non-root parent; update: parent absent or matching); writes to skipped nodes refused; atomic temp-file-and-rename; refuse if the file changed on disk since it was read; read back through a full load and roll back on failure. §4.2 *Writing to disk*. |
+| D28 | Writing to disk | An exclusive OS lock (`flock` on `notes/.write.lock`, bounded 10 s wait, then "busy — retry") serializes writes across processes; one writer per `notes/` per process; each write from a fresh full load; create vs update by stem existence (create: valid unused stem, description, a loaded parent, or the root `/` (CLI7); update: parent absent or matching); writes to skipped nodes refused; atomic temp-file-and-rename; refuse if the file changed on disk since it was read; read back through a full load and roll back on failure. §4.2 *Writing to disk*. |
 | D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: the guidance ships as `agent/prompt/memory_usage.md`, and since CLI7 nothing is seeded: a missing store is empty, and the starting tree ships as `agent/memory/notes/` (III.6); there is no `init`.)* |
 | D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. *(For the CLI, Part III supersedes the injection and the corrective error for a missing `notes/`: since CLI7 a missing `notes/` is an empty store, III.1.)* |
 | D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `read`, `write`, `search` and `index`; it seeds nothing, a missing store is empty, and no typology is built in (CLI7, III.6). The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1 and 75 (retry). There is no logging and no capability line. |

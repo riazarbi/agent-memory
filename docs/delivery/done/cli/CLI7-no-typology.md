@@ -124,3 +124,25 @@ Local only: Go toolchain, temp dirs. No network, no live agent.
 - `seeded()` in the tests copies `agent/memory/`, so the shipped files must exist for most binary
   tests to pass.
 - Keep the tree lint-clean (`golangci-lint run ./...`, full tree).
+
+## Post-verification notes (2026-11-19)
+- Built in one pass. Pre-filter green; no existing test touched. Production change: `seed.go`
+  deleted; writer accepts `RootParent = "/"`; CLI split into `notesDir()` (read verbs, creates
+  nothing) and `makeNotesDir()` (write only); `read /` and `write /` handled at parse time. New tests
+  `cmd/memory/typology_bin_test.go`, `internal/memory/root_test.go`.
+- Verifier: all six criteria PASS through the real binary, run under umask 077; every
+  wrong-but-plausible build named by a criterion is caught (20 mutations); 7/7 inverted assertions
+  failed; the starting tree is byte-identical to CLI6's seeded tree and every verb's output matches
+  the CLI6 binary on it; archives carry `agent/memory/`. Tamper and scope clean.
+- AC5 was mis-drafted: it banned the word "people" in descriptions while III.6 pins a write
+  description whose example says "cc people". The pinned text won; the test exempts that quoted
+  value and fails if the spec text changes. Recorded in III.4's known gaps.
+- `TestConcurrentFirstWrites` catches a missing EEXIST tolerance reliably in isolation (12/12) but
+  survived one full-suite run under load: probabilistic, accepted.
+- Builder spec gaps resolved here: Part II passages still saying "never the root" (§4.5 write
+  bullet and restructuring list, §4.6 protocol path, §4.7 tools, the D28 row) revised in place;
+  known gaps added for writer-checked errors after store creation and the install guard's dangling
+  symlink. Left: the mode of a pre-existing `memory/` (kept as is, test-pinned), `read / --block=`
+  precedence, dead `--parent topics` in CLI6 test arrays (calls fail before the store).
+- Process: the builder ran one `git diff --stat` (read-only) during a mutation revert. govulncheck
+  was refused to the verifier; the lead ran it at banking.

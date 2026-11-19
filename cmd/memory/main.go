@@ -1,8 +1,9 @@
 // Command memory is a long-term memory store, a tree of markdown notes,
 // used on its own or through shell tools (docs/spec/agent-memory.md Part
 // III). The store is <parent>/memory, the parent being --parent-dir given
-// before the verb, else MEMORY_PARENT_DIR, else HOME; the parent must exist,
-// and the first call of any verb seeds the store. Results are XML on
+// before the verb, else MEMORY_PARENT_DIR, else HOME; the parent must exist.
+// A missing store is an empty one, and only write creates it; memory seeds
+// nothing and names no node (Part III.6). Results are XML on
 // stdout with exit 0; an error is one line on stderr with exit 1, or exit 75
 // when retrying can succeed (busy, changed on disk). It never logs.
 package main
@@ -34,14 +35,16 @@ const usage = `usage: memory [--parent-dir DIR] <verb> [arguments]
 
 verbs:
   read [STEM] [--block ID] [--depth N]  read a node (depth defaults to 1), or
-                                        with no STEM the first-level nodes and tags
+                                        with no STEM, or /, the root: the
+                                        top-level nodes and tags
   write STEM [--parent P] [--description D] [--tag T]... [--property K=V]...
         [--add TEXT]... [--replace ID=TEXT]...
                                         create or update a node; --add and
-                                        --replace are its blocks, in order
+                                        --replace are its blocks, in order;
+                                        --parent / makes a top-level node
   search QUERY                          search, in Obsidian search syntax (quote
                                         a query of several words)
-  index                                 the index: first-level nodes, their
+  index                                 the index: top-level nodes, their
                                         children and the top tags
 
 The store is <parent>/memory. The parent is --parent-dir DIR (or
@@ -49,8 +52,8 @@ The store is <parent>/memory. The parent is --parent-dir DIR (or
 environment; else HOME. A relative parent is taken against the working
 directory. An empty --parent-dir, or a variable set but empty, is an error.
 After the verb, --parent-dir is not an option. The parent must already
-exist. Any verb creates memory/notes/ with the first-level nodes when
-notes/ is missing.
+exist. A missing store is an empty one: read, search and index create
+nothing, and write creates memory/notes/ when it is missing.
 `
 
 // verb runs one verb's arguments against the store at loc and returns its

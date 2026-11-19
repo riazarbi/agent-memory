@@ -70,6 +70,10 @@ type rootXML struct {
 
 const dateLayout = "2006-01-02"
 
+// rootArg is the root as the CLI writes it (Part III.6): read's STEM for
+// the root read, and write's --parent for a first-level node.
+const rootArg = memory.RootParent
+
 // readArgs are read's parsed arguments.
 type readArgs struct {
 	stem     string
@@ -105,11 +109,8 @@ func parseReadArgs(args []string) (readArgs, error) {
 	}
 	ra.typed = typed
 	_, ra.hasBlock = typed["block"]
-	switch {
-	case len(pos) > 1:
-		return ra, fmt.Errorf("STEM: read takes one stem, got %d: %s", len(pos), strings.Join(pos, " "))
-	case len(pos) == 1:
-		ra.stem, ra.hasStem = pos[0], true
+	if err := ra.setStem(pos); err != nil {
+		return ra, err
 	}
 	if ra.hasBlock && ra.block == "" {
 		return ra, fmt.Errorf("%s: needs a block ID", typed["block"])
@@ -120,9 +121,27 @@ func parseReadArgs(args []string) (readArgs, error) {
 	return ra, nil
 }
 
+// setStem takes read's positional arguments: none or / is the root read
+// (Part III.6), one other is the node's STEM. The root has no blocks, so
+// / with --block is an error naming STEM.
+func (ra *readArgs) setStem(pos []string) error {
+	switch {
+	case len(pos) > 1:
+		return fmt.Errorf("STEM: read takes one stem, got %d: %s", len(pos), strings.Join(pos, " "))
+	case len(pos) == 1 && pos[0] == rootArg:
+		if ra.hasBlock {
+			return fmt.Errorf("STEM: / is the root, which has no blocks; give the stem of the node to read %s from", ra.typed["block"])
+		}
+	case len(pos) == 1:
+		ra.stem, ra.hasStem = pos[0], true
+	}
+	return nil
+}
+
 // readVerb is D29's memory_read: a node with its blocks, children to
 // --depth, links and backlinks; one block with --block; the root with no
-// STEM. Argument errors come before the store is looked at.
+// STEM or with /. Argument errors come before the store is looked at, and
+// a missing store reads as an empty one (Part III.1).
 func readVerb(loc location, args []string) ([]byte, error) {
 	ra, err := parseReadArgs(args)
 	if err != nil {

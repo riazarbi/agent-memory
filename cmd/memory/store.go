@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/riazarbi/agent-memory/internal/memory"
 )
 
 const (
@@ -82,46 +80,94 @@ func parentFromEnv() (dir, source string, err error) {
 	return "", "", errNoStore
 }
 
-// notesDir is the store's notes/, seeded first if it is missing (Part
-// III.1): every verb calls it after checking its arguments, so the first
-// call of any kind creates the store, and an argument error creates
-// nothing. The parent must already exist as a directory (symlinks
-// followed); memory creates memory/ inside it, never the parent itself, so
-// a mistyped parent fails loudly instead of starting a store somewhere
-// unexpected. memory/ or notes existing as anything but a directory is an
-// error naming that path. Seeding prints nothing.
-func (l location) notesDir() (string, error) {
+// storeDirMode is the mode write gives memory/ and notes/ when it creates
+// them, whatever the umask (Part III.1).
+const storeDirMode fs.FileMode = 0o755
+
+// paths resolves the store (Part III.1): the parent and its source, which
+// must already exist as a directory (symlinks followed), then memory/ and
+// memory/notes inside it. memory creates memory/ inside the parent, never
+// the parent itself, so a mistyped parent fails loudly instead of starting
+// a store somewhere unexpected.
+func (l location) paths() (memoryDir, notes string, err error) {
 	parent, source, err := l.parent()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	info, err := os.Stat(parent) //nolint:gosec // the parent the caller named (III.1); reaching it is this command's job
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		return "", fmt.Errorf("parent dir %s does not exist (from %s)", parent, source)
+		return "", "", fmt.Errorf("parent dir %s does not exist (from %s)", parent, source)
 	case err != nil:
-		return "", fmt.Errorf("parent dir %s (from %s): %w", parent, source, err)
+		return "", "", fmt.Errorf("parent dir %s (from %s): %w", parent, source, err)
 	case !info.IsDir():
-		return "", fmt.Errorf("parent dir %s is not a directory (from %s)", parent, source)
+		return "", "", fmt.Errorf("parent dir %s is not a directory (from %s)", parent, source)
 	}
-	memoryDir := filepath.Join(parent, "memory")
-	notes := filepath.Join(memoryDir, "notes")
+	memoryDir = filepath.Join(parent, "memory")
+	return memoryDir, filepath.Join(memoryDir, "notes"), nil
+}
+
+// notesDir is the store's notes/ for the read verbs, which create nothing
+// (Part III.1): a missing memory/ or notes/ is returned as it is, and loads
+// as an empty store. memory/ or notes existing as anything but a directory
+// is an error naming that path.
+func (l location) notesDir() (string, error) {
+	memoryDir, notes, err := l.paths()
+	if err != nil {
+		return "", err
+	}
 	for _, dir := range []string{memoryDir, notes} {
 		missing, err := missingDir(dir)
-		if err != nil {
-			return "", err
-		}
-		if missing {
-			return notes, memory.SeedDefaults(memoryDir)
+		if err != nil || missing {
+			return notes, err
 		}
 	}
 	return notes, nil
 }
 
-// missingDir reports whether dir does not exist (judged without following
-// a symlink, as SeedDefaults judges notes/). Anything at dir that is not a
-// directory, or a symlink that does not lead to one, is an error naming
-// it.
+// makeNotesDir is the store's notes/ for write, which creates memory/ and
+// memory/notes as needed, mode 0755 forced, and nothing else (Part III.1).
+// write calls it after its argument checks and before its lock, so an
+// argument error creates nothing. Another write creating the same
+// directory first is not an error.
+func (l location) makeNotesDir() (string, error) {
+	memoryDir, notes, err := l.paths()
+	if err != nil {
+		return "", err
+	}
+	for _, dir := range []string{memoryDir, notes} {
+		if err := makeStoreDir(dir); err != nil {
+			return "", err
+		}
+	}
+	return notes, nil
+}
+
+// makeStoreDir creates dir with storeDirMode if it is missing. Whatever is
+// there already, or appears there first, must be a directory.
+func makeStoreDir(dir string) error {
+	missing, err := missingDir(dir)
+	if err != nil || !missing {
+		return err
+	}
+	if err := os.Mkdir(dir, storeDirMode); err != nil { //nolint:gosec // inside the store the caller named (III.1)
+		if errors.Is(err, fs.ErrExist) {
+			// Another write made it in between: judge what it made.
+			_, err := missingDir(dir)
+			return err
+		}
+		return fmt.Errorf("creating %s: %w", dir, err)
+	}
+	// Forced, whatever the umask.
+	if err := os.Chmod(dir, storeDirMode); err != nil { //nolint:gosec // inside the store the caller named (III.1)
+		return fmt.Errorf("creating %s: %w", dir, err)
+	}
+	return nil
+}
+
+// missingDir reports whether dir does not exist, judged without following
+// a symlink. Anything at dir that is not a directory, or a symlink that
+// does not lead to one (a dangling one included), is an error naming it.
 func missingDir(dir string) (bool, error) {
 	if _, err := os.Lstat(dir); errors.Is(err, fs.ErrNotExist) { //nolint:gosec // inside the store the caller named (III.1)
 		return true, nil
