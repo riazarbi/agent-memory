@@ -1877,7 +1877,8 @@ creates a node on its own (III.6).
   not an error, it is an empty store.
 - **Retry:** "busy" and "changed on disk" (D28) go to stderr with exit 75 (`EX_TEMPFAIL`).
 - **Lint found errors:** `lint` exits 2 when the store has error-severity problems, with its full
-  report on stdout and nothing on stderr (III.7). No other verb exits 2.
+  report on stdout and nothing on stderr (III.7); with `--exit-zero` it exits 0 instead. No other
+  verb exits 2.
 - **No logging, no events.** The agent's own `tool.invoked` and `tool.error` record each call. The
   `memory.*` events of Part II are not emitted.
 
@@ -1897,7 +1898,8 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 | `agent/README.md` | — | What each file is, where it goes, and the rules below. |
 
 - **Tool files** are argv shell tools (`"command": "memory"`), with `prepend_args`
-  `["--parent-dir", "${AGENT_STATE_DIR}", "<verb>"]`; `memory_index.json` takes no model arguments
+  `["--parent-dir", "${AGENT_STATE_DIR}", "<verb>"]` — except `memory_lint.json`, which pins
+  `lint --exit-zero` and takes no model arguments, so nothing follows its option (III.7); `memory_index.json` takes no model arguments
   (`allow_user_args: false`). Their descriptions are D29's and D31's, adapted to flags, and never
   mention `--parent-dir`. The agent replaces `${AGENT_STATE_DIR}` with its absolute state dir (agent
   spec `child-environment.md` E3, agent CHANGELOG 2026-11-19); an older agent passes the text
@@ -1929,8 +1931,8 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 
 - (CLI3) If the trust line, the notice and `<tags>` alone exceed the budget (50 very long tags),
   `index` drops every entry and prints the result over budget.
-- (CLI3) All four tool descriptions say exit 75 means "run again", though only `write` can return
-  it.
+- (CLI3) The four verb tools' descriptions (read, write, search, index) say exit 75 means "run
+  again", though only `write` can return it. `memory_lint.json`'s does not (CLI9).
 - (CLI3) Re-running the release job on an already-released commit publishes a `.2` release with
   empty notes.
 - (CLI4) A store outside an agent's state dir (shared by several agents) is not covered by the

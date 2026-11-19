@@ -3,6 +3,9 @@ package main
 import (
 	"encoding/xml"
 	"errors"
+	"flag"
+	"fmt"
+	"io"
 
 	"github.com/riazarbi/agent-memory/internal/memory"
 )
@@ -29,12 +32,29 @@ type problemXML struct {
 	Reason   string `xml:",chardata"`
 }
 
+// lintFlags is lint's one option, --exit-zero (CLI9): the same report,
+// but exit 0 whenever it was produced, for callers that discard a
+// command's output when it exits non-zero (the agent's shell tools).
+func lintFlags(exitZero *bool) *flag.FlagSet {
+	flags := flag.NewFlagSet("lint", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	flags.BoolVar(exitZero, "exit-zero", false, "")
+	return flags
+}
+
 // lintVerb loads the store, creating nothing, and reports every problem
 // the reader finds. It returns the report alone when the store has no
-// errors, and the report with errLintFound when it has.
+// errors, or when --exit-zero is given, and the report with errLintFound
+// when it has errors. An argument error comes first, --exit-zero or not:
+// a failure to run is never exit 0.
 func lintVerb(loc location, args []string) ([]byte, error) {
-	if err := noArgs("lint", args); err != nil {
+	var exitZero bool
+	pos, _, err := parseArgs(lintFlags(&exitZero), args)
+	if err != nil {
 		return nil, err
+	}
+	if len(pos) > 0 {
+		return nil, fmt.Errorf("lint takes no arguments other than --exit-zero, got %q", pos[0])
 	}
 	notes, err := loc.notesDir()
 	if err != nil {
@@ -55,7 +75,7 @@ func lintVerb(loc location, args []string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if x.Errors > 0 {
+	if x.Errors > 0 && !exitZero {
 		return out, errLintFound
 	}
 	return out, nil

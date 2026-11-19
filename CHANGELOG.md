@@ -3,6 +3,63 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-19 - An agent can lint its own store and see the whole report: `lint --exit-zero` and `memory_lint.json`
+
+- `cmd/memory/lint.go`: `lint` takes one option, `--exit-zero` (spec
+  III.7, CLI9), from its own flag set (`lintFlags`) instead of `noArgs`.
+  With it, `lintVerb` returns the report with no error, so `run` prints it
+  and exits 0 whatever the error count; the report itself is unchanged
+  (byte-equal to plain `lint`'s). Argument, resolution and
+  missing-parent errors still come first and still exit 1: `--exit-zero`
+  drops only the verdict, never a failure to run. A stray argument now
+  says `lint takes no arguments other than --exit-zero, got "…"`.
+  Why the flag at all: the agent's shell tools discard stdout when a
+  command exits non-zero, so a tool running plain `lint` would show the
+  model `exit status 2` and never the report. Rejected: making the tool
+  run something else (a wrapper script, or `lint; true`, which argv
+  tools cannot express).
+- `cmd/memory/args.go`: `setFlag` understands boolean flags (the first
+  the CLI has): given, the flag is on and consumes nothing, so
+  `lint --exit-zero extra` refuses `extra` instead of taking it as the
+  flag's value. `--exit-zero=true` / `=false` is refused (`takes no
+  value`), following flake8 and ruff, whose `--exit-zero` takes none,
+  and III.7's "its one option is `--exit-zero`"; Go's `-flag=false`
+  convention was rejected as a second spelling of plain `lint`. No other
+  verb has a boolean flag, so their parsing is unchanged.
+- `cmd/memory/main.go`: the usage text shows `lint [--exit-zero]` and
+  what it does; the package comment says lint exits 2 unless given it.
+- `agent/tools/memory_lint.json` (new): III.7's file exactly: `memory`,
+  `prepend_args` `["--parent-dir", "${AGENT_STATE_DIR}", "lint",
+  "--exit-zero"]`, `read_only` true, `allow_user_args` false,
+  `forbidden_args` empty, and the pinned description, which names no flag
+  and no exit 75 (`lint` cannot be busy). The existing install commands
+  (`cp tools/memory_*.json`) already copy it.
+- `agent/README.md`: the table lists `tools/memory_lint.json` (optional);
+  a paragraph says what it is for (the agent checking its store after the
+  operator's hand edits), why it runs `--exit-zero`, and that cron jobs
+  and hooks use plain `lint`. The tool-file paragraph no longer claims
+  every description mentions exit 75, and gives the lint file's
+  `prepend_args`, which do not end with the verb.
+- `README.md`: the Usage section shows `memory lint --exit-zero`,
+  explains it beside `lint`, and points at the tool file; the sentence
+  "no tool file ships for it, because it is the operator's check" is gone
+  (CLI9 reverses it), and the exit-code paragraph notes the exception.
+- `cmd/memory/lint_tool_test.go` (new): binary tests for each acceptance
+  criterion: plain vs `--exit-zero` stdout compared byte for byte on a
+  store with one error and one warning, on the clean starting tree and on
+  a missing store; failures to run (`extra` on either side of the flag,
+  `=value`, an unknown flag, an empty `MEMORY_PARENT_DIR`, a missing
+  parent, `memory/` a file) stay
+  exit 1 with nothing created; the tool file parsed with the strict
+  loader and its description compared with III.7's blockquote read from
+  the spec; the tool run as the agent runs it (substituted prepend,
+  existing empty decoy `MEMORY_PARENT_DIR` that must stay empty), its
+  report compared problem by problem with the library's; usage and README
+  checks. The tests superseded by this unit (`TestToolFilesSchema`'s file
+  list, `agentFiles`) were edited in the lock commit and are untouched
+  here. No smoke script: this repo has none, and the behaviour needs no
+  live agent (the agent-side discard of non-zero output is out of scope).
+
 ## 2026-11-19 - `memory lint` reports every problem in a store, and exits 2 when a node is missing from it
 
 - `cmd/memory/lint.go` (new): the `lint` verb (spec III.7). No arguments

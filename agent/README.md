@@ -12,6 +12,7 @@ Below, `<state dir>` is the agent's state dir (by default `.agent` in its workin
 | `tools/memory_write.json` | `<state dir>/tools/` | Shell tool running `memory write`: creating nodes and adding or replacing blocks. |
 | `tools/memory_search.json` | `<state dir>/tools/` | Shell tool running `memory search`: searching. |
 | `tools/memory_index.json` | `<state dir>/tools/` | Shell tool running `memory index`: the index on demand (takes no arguments). |
+| `tools/memory_lint.json` | `<state dir>/tools/` | Shell tool running `memory lint --exit-zero`: the agent checks its own store, for example after you have edited notes by hand (takes no arguments). Optional. |
 | `prompt/memory_usage.md` | `<state dir>/prompt/` | The guidance: when and what to save. A `prompt/` fragment, loaded every turn. |
 | `livecontext/memory_index.json` | `<state dir>/livecontext/` | A live-context entry showing the index at the start of each input. |
 | `memory/notes/` | `<state dir>/memory/notes/` | An optional starting tree: the top-level nodes `user`, `projects`, `people` and `topics`. Copied only into a store that does not exist yet. |
@@ -33,9 +34,11 @@ That installs everything. The last line copies the starting tree only when `<sta
 
 ## The tool files
 
-Installing a tool file is the grant: leave one out and the agent lacks that capability. Without `memory_write.json` the agent's memory is read-only. If the index is in the live-context entry, `memory_index.json` is optional. Each description tells the model how to call its verb, including that exit 75 means "run the same command again".
+Installing a tool file is the grant: leave one out and the agent lacks that capability. Without `memory_write.json` the agent's memory is read-only. If the index is in the live-context entry, `memory_index.json` is optional. Each description tells the model how to call its verb; the four verb tools' descriptions also say that exit 75 means "run the same command again" (`lint` cannot be busy, so `memory_lint.json`'s does not).
 
-Each file's `prepend_args` are `["--parent-dir", "${AGENT_STATE_DIR}", "<verb>"]`. The model's arguments come after the verb, where `--parent-dir` is not an option, so the model cannot move the store.
+Each file's `prepend_args` are `["--parent-dir", "${AGENT_STATE_DIR}", "<verb>"]`, and `memory_lint.json`'s are `["--parent-dir", "${AGENT_STATE_DIR}", "lint", "--exit-zero"]`. The model's arguments come after the verb, where `--parent-dir` is not an option, so the model cannot move the store.
+
+`memory_lint.json` is optional, like every tool file. It lets the agent check its own store, for example after you have edited notes by hand (an editor or Obsidian, a git merge, a sync conflict): a note the reader cannot load silently disappears from `read`, `search` and the index, and `lint` lists it. Its description tells the model that an error is for you to fix (its memory tools cannot) and which warnings it can fix itself. It runs `lint --exit-zero` because the agent's shell tools show the model only `exit status 2`, not the report, when a command exits non-zero; with `--exit-zero` the model always gets the report. It takes no model arguments. A cron job or git hook should run plain `memory lint` and use its exit code instead (see the repo's README).
 
 ## `${AGENT_STATE_DIR}` needs a recent agent
 

@@ -45,14 +45,21 @@ func parseArgs(fs *flag.FlagSet, args []string) (positional []string, typed map[
 }
 
 // setFlag sets the flag arg names, from its =value or else from the first of
-// rest. It returns the flag as typed and how many of rest it consumed.
+// rest. A boolean flag (lint's --exit-zero) takes no value: given, it is
+// on, and an =value is an error, so it never consumes the next argument.
+// It returns the flag as typed and how many of rest it consumed.
 func setFlag(fs *flag.FlagSet, arg string, rest []string) (token string, consumed int, err error) {
 	token, value, hasValue := strings.Cut(arg, "=")
 	name := strings.TrimPrefix(token[1:], "-")
 	if name == "" || name[0] == '-' || fs.Lookup(name) == nil {
 		return token, 0, fmt.Errorf("%s: unknown flag", token)
 	}
-	if !hasValue {
+	if b, ok := fs.Lookup(name).Value.(interface{ IsBoolFlag() bool }); ok && b.IsBoolFlag() {
+		if hasValue {
+			return token, 0, fmt.Errorf("%s: takes no value", token)
+		}
+		value = "true"
+	} else if !hasValue {
 		if len(rest) == 0 {
 			return token, 0, fmt.Errorf("%s: needs a value", token)
 		}

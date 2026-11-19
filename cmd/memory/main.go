@@ -6,8 +6,8 @@
 // nothing and names no node (Part III.6). Results are XML on
 // stdout with exit 0; an error is one line on stderr with exit 1, or exit 75
 // when retrying can succeed (busy, changed on disk). lint alone exits 2,
-// its report on stdout, when the store has errors (Part III.7). It never
-// logs.
+// its report on stdout, when the store has errors, unless given
+// --exit-zero (Part III.7). It never logs.
 package main
 
 import (
@@ -51,9 +51,11 @@ verbs:
                                         a query of several words)
   index                                 the index: top-level nodes, their
                                         children and the top tags
-  lint                                  check the whole store: report every
+  lint [--exit-zero]                    check the whole store: report every
                                         problem; exit 0 with none or only
-                                        warnings, 2 when there are errors
+                                        warnings, 2 when there are errors;
+                                        with --exit-zero, the same report
+                                        and exit 0 even with errors
 
 The store is <parent>/memory. The parent is --parent-dir DIR (or
 --parent-dir=DIR), given before the verb; else MEMORY_PARENT_DIR from the

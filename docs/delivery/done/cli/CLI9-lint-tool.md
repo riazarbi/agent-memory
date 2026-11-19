@@ -71,3 +71,16 @@ Local only: Go toolchain, temp dirs. No network, no live agent.
   no error.
 - `tools_test.go`'s `toolCaller` already substitutes `${AGENT_STATE_DIR}` and sets a decoy parent.
 - Keep the tree lint-clean (`golangci-lint run ./...`, full tree).
+
+## Post-verification notes (2026-11-19)
+- Built in one pass. Pre-filter green; no existing test touched. Production change: `setFlag` handles
+  bool flags (`--exit-zero=VALUE` refused), `lint` gets a flag set, `memory_lint.json` (new). New
+  tests `cmd/memory/lint_tool_test.go`.
+- Verifier: all four criteria PASS through the real binary and an agent-like harness (stdout shown
+  only on exit 0): the model sees the report with errors; 17 code and tool-file mutants killed;
+  10/10 inverted assertions failed; tamper and scope clean; govulncheck clean.
+- Builder spec gaps resolved here: III.4's tool-file rule and III.3's exit-2 bullet now note the
+  lint exception; the CLI3 exit-75 gap reworded for five tool files. The builder also corrected
+  README and agent/README sentences CLI9 made false (in scope by implication; the unit should have
+  listed them). Left: `toolCaller` and the typology check are wired to the four verb tools.
+- Process: the builder's gate command ended with `git status` (refused, never ran).
