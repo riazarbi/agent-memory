@@ -4,7 +4,7 @@ The command is `memory`.
 
 Long-term memory for an AI agent: a tree of markdown notes with YAML frontmatter, which a model can read, write and search, and which a human can browse as an Obsidian vault.
 
-**Status:** the library (`internal/memory`) and the `memory` CLI are built and tested. The CLI's verbs are `init`, `read`, `write`, `search` and `index`; the repo's `agent/` folder ships everything an agent needs (shell-tool files, guidance, a live-context entry), and every merge to `main` publishes release archives carrying the binary and that folder.
+**Status:** the library (`internal/memory`) and the `memory` CLI are built and tested. The CLI's verbs are `read`, `write`, `search` and `index`, and the first call creates the store; the repo's `agent/` folder ships everything an agent needs (shell-tool files, guidance, a live-context entry), and every merge to `main` publishes release archives carrying the binary and that folder.
 
 The design is in [`docs/spec/agent-memory.md`](docs/spec/agent-memory.md). The conversation that produced it is in [`docs/research/`](docs/research/).
 
@@ -13,7 +13,6 @@ The design is in [`docs/spec/agent-memory.md`](docs/spec/agent-memory.md). The c
 ```bash
 go build -o memory ./cmd/memory
 
-memory init                        # seed the store if it is missing
 memory read                        # the first-level nodes and every tag in use
 memory read topics                 # a node: blocks, children, links, backlinks
 memory read topics --depth 2       # children and grandchildren (--depth 0: none)
@@ -34,17 +33,17 @@ memory index                       # <memory_index>: the top of the tree and the
 memory --parent-dir /srv/agent/.agent read topics   # the store /srv/agent/.agent/memory
 ```
 
-The store is always `<parent>/memory`, where `<parent>` is the first of: `--parent-dir DIR` (or `--parent-dir=DIR`), given before the verb; `MEMORY_PARENT_DIR` from the environment; `HOME`. So plain `memory init` gives `~/memory`, and `export MEMORY_PARENT_DIR=…` points every call elsewhere. A relative parent is taken against the working directory; nothing expands `~` (the shell does). A variable set but empty is an error, never a fall-through to the next source: `MEMORY_PARENT_DIR=""` fails even when `HOME` is set, and so does an empty `--parent-dir`. With none of the three, `memory` fails naming all three. After the verb, `--parent-dir` is not an option (it is an unknown flag, or part of `search`'s query), so it never changes the store there. There is no `--store` flag.
+The store is always `<parent>/memory`, where `<parent>` is the first of: `--parent-dir DIR` (or `--parent-dir=DIR`), given before the verb; `MEMORY_PARENT_DIR` from the environment; `HOME`. So plain `memory read` gives `~/memory`, and `export MEMORY_PARENT_DIR=…` points every call elsewhere. A relative parent is taken against the working directory; nothing expands `~` (the shell does). A variable set but empty is an error, never a fall-through to the next source: `MEMORY_PARENT_DIR=""` fails even when `HOME` is set, and so does an empty `--parent-dir`. With none of the three, `memory` fails naming all three. After the verb, `--parent-dir` is not an option (it is an unknown flag, or part of `search`'s query), so it never changes the store there. There is no `--store` flag.
 
-`init` creates `memory/notes/` with the first-level nodes `user`, `projects`, `people` and `topics`, and nothing else, only when `memory/` does not exist; once it exists, `init` changes nothing. `read` and `search` never create anything.
+There is no install step: the first call creates the store. Any verb, `read`, `search` and `index` included, first creates `memory/notes/` with the first-level nodes `user`, `projects`, `people` and `topics` when `notes/` is missing (and `memory/` too, if that is missing), then does its job, printing exactly what it would on a store created earlier. Nothing else is created, and anything already in `memory/` is left alone. Once `notes/` exists, even empty or missing a first-level node, nothing is added to it, so a deleted node stays deleted; deleting `notes/` resets the store. The parent must already exist: `memory` creates `memory/` inside it, never the parent itself, so a mistyped `--parent-dir` or `MEMORY_PARENT_DIR` fails instead of starting a store somewhere unexpected. Once the store exists, `read`, `search` and `index` write nothing.
 
 `write STEM` creates the node if the stem is new (then `--parent` and `--description` are required) and updates it otherwise. Each `--add` and `--replace` is one block, one plain paragraph, numbered from 1 in argv order; `--property` values are strings. `write` cannot clear tags or delete blocks. It prints `<memory_write created="true|false" stem="…">` with one `<assigned>` ID per block, then the node as `read --depth 0` shows it.
 
 `search QUERY` takes the query as one argument. It prints `<memory_search query="…" matched="N" shown="M">`: at most 20 nodes, most hit blocks first, each with at most 5 matching blocks, within 30,000 bytes, and an `<omitted>` notice for the rest.
 
-`index` prints `<memory_index>`: a trust line, the first-level nodes by stem with their children one level deep (each with its tags, true child count, date and description), and the 50 most used tags. It never shows a filesystem path. It is kept within 200 lines and 25,000 bytes: past either, the oldest second-level entries are dropped first, then the oldest first-level ones, and a notice says how many nodes are not shown. With `notes/` holding no node it prints nothing and exits 0; without `notes/` it is an error, as for `read`.
+`index` prints `<memory_index>`: a trust line, the first-level nodes by stem with their children one level deep (each with its tags, true child count, date and description), and the 50 most used tags. It never shows a filesystem path. It is kept within 200 lines and 25,000 bytes: past either, the oldest second-level entries are dropped first, then the oldest first-level ones, and a notice says how many nodes are not shown. With `notes/` holding no node it prints nothing and exits 0.
 
-Results are XML on stdout with exit 0. An error is one line on stderr with exit 1, naming the argument as typed (`STEM`, `--parent`, `--add #2`, `--replace m-7f3a2k`): an unknown stem lists up to five near matches, and a store without `notes/` says `memory has no notes/ folder; run memory init`. Exit 75 means retry: the store was busy (another write held its lock for 10 s) or the note changed on disk while `write` ran (an editor that does not take the lock); make the same call again. Dates (`modified`) are in the process's time zone (`TZ`).
+Results are XML on stdout with exit 0. An error is one line on stderr with exit 1, naming the argument as typed (`STEM`, `--parent`, `--add #2`, `--replace m-7f3a2k`): an unknown stem lists up to five near matches, and a parent that does not exist says so with where it came from, as in `parent dir /srv/nowhere does not exist (from --parent-dir)` (or `(from MEMORY_PARENT_DIR)`, `(from HOME)`). Exit 75 means retry: the store was busy (another write held its lock for 10 s) or the note changed on disk while `write` ran (an editor that does not take the lock); make the same call again. Dates (`modified`) are in the process's time zone (`TZ`).
 
 ## Wiring it to an agent
 
@@ -68,17 +67,7 @@ Or build it from a checkout with Go: `go build -o memory ./cmd/memory`. The chec
 
 Shell tools and live-context entries run `memory` by name, so it must be on the `PATH` of the agent process (they inherit its environment and working directory), for example `install -m 0755 memory /usr/local/bin/`. Check with `command -v memory` in the agent's environment.
 
-### 3. Run `memory init`
-
-Give it the agent's state dir as the parent, so the store lands where the tool files point:
-
-```bash
-memory --parent-dir <state dir> init
-```
-
-It creates `<state dir>/memory/notes/` (the first-level nodes `user`, `projects`, `people`, `topics`) and nothing else. If `memory/` already exists it changes nothing.
-
-### 4. Copy the agent files
+### 3. Copy the agent files
 
 [`agent/README.md`](agent/README.md) says what each file is, which ones to leave out, which agent versions can use them (the agent must substitute `${AGENT_STATE_DIR}`), and how to point an agent at a shared store. From the directory holding `agent/` (the unpacked archive's folder, or a checkout):
 
@@ -88,6 +77,8 @@ cp agent/tools/memory_*.json <state dir>/tools/
 cp agent/prompt/memory_usage.md <state dir>/prompt/
 cp agent/livecontext/memory_index.json <state dir>/livecontext/
 ```
+
+There is nothing to seed: the store `<state dir>/memory` appears on the agent's first memory call.
 
 ## Development
 

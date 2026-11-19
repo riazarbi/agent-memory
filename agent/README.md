@@ -18,15 +18,7 @@ Below, `<state dir>` is the agent's state dir (by default `.agent` in its workin
 
 ## Install
 
-First seed the store, so it exists where the files point:
-
-```bash
-memory --parent-dir <state dir> init
-```
-
-It creates `<state dir>/memory/notes/` with the first-level nodes `user`, `projects`, `people` and `topics`, and nothing else. If `<state dir>/memory/` already exists it changes nothing.
-
-Then, from this folder (`agent/` in a checkout, or in an unpacked release archive), copy the files:
+From this folder (`agent/` in a checkout, or in an unpacked release archive), copy the files:
 
 ```bash
 mkdir -p <state dir>/tools <state dir>/prompt <state dir>/livecontext
@@ -35,7 +27,7 @@ cp prompt/memory_usage.md <state dir>/prompt/
 cp livecontext/memory_index.json <state dir>/livecontext/
 ```
 
-That installs everything. Copy less to grant less; the sections below say what each choice means.
+That installs everything. There is nothing to seed: the store, `<state dir>/memory`, appears on the agent's first memory call, which creates `memory/notes/` with the first-level nodes `user`, `projects`, `people` and `topics`. Copy less to grant less; the sections below say what each choice means.
 
 ## The tool files
 
@@ -45,11 +37,11 @@ Each file's `prepend_args` are `["--parent-dir", "${AGENT_STATE_DIR}", "<verb>"]
 
 ## `${AGENT_STATE_DIR}` needs a recent agent
 
-The tool files and the live-context entry need an agent that replaces `${AGENT_STATE_DIR}` in a tool's `prepend_args` and an entry's `args` with its absolute state dir (agent CHANGELOG 2026-11-19). An older agent passes the text literally, and every call then fails with `memory has no notes/ folder; run memory init`; the live-context entry shows that error at the start of every input.
+The tool files and the live-context entry need an agent that replaces `${AGENT_STATE_DIR}` in a tool's `prepend_args` and an entry's `args` with its absolute state dir (agent CHANGELOG 2026-11-19). An older agent passes the text literally, and every call then fails with `parent dir ${AGENT_STATE_DIR} does not exist (from --parent-dir)`, and creates nothing; the live-context entry shows that error at the start of every input.
 
 ## Pointing an agent at another store
 
-The agent's store is `<state dir>/memory`, named explicitly with `--parent-dir`, so whatever the operator's shell exports (`MEMORY_PARENT_DIR`, `HOME`) cannot redirect it. To point an agent at another store (one shared by several agents, say), edit the path: replace `${AGENT_STATE_DIR}` with the store's parent dir in every tool file's `prepend_args` and in the live-context entry's `args`. Never delete the `--parent-dir` pair: the agent would then use `MEMORY_PARENT_DIR` or `$HOME/memory`, which may be a person's own store.
+The agent's store is `<state dir>/memory`, named explicitly with `--parent-dir`, so whatever the operator's shell exports (`MEMORY_PARENT_DIR`, `HOME`) cannot redirect it. To point an agent at another store (one shared by several agents, say), edit the path: replace `${AGENT_STATE_DIR}` with the store's parent dir (which must exist) in every tool file's `prepend_args` and in the live-context entry's `args`. Never delete the `--parent-dir` pair: the agent would then use `MEMORY_PARENT_DIR` or `$HOME/memory`, which may be a person's own store.
 
 A store outside the agent's state dir is not covered by the agent's state-dir write deny, so the agent's file tools can edit its notes directly, bypassing `write`'s checks and lock.
 
@@ -59,4 +51,4 @@ A store outside the agent's state dir is not covered by the agent's state-dir wr
 
 ## The live-context entry
 
-`livecontext/memory_index.json` runs `memory --parent-dir ${AGENT_STATE_DIR} index` at the start of each input, so the agent sees the top of its memory without asking. It is optional: the index can instead be a tool (`tools/memory_index.json`), or nowhere, leaving the agent to use `read`. Before `init` it shows an error on every input, which is why `init` comes first.
+`livecontext/memory_index.json` runs `memory --parent-dir ${AGENT_STATE_DIR} index` at the start of each input, so the agent sees the top of its memory without asking. It is optional: the index can instead be a tool (`tools/memory_index.json`), or nowhere, leaving the agent to use `read`.

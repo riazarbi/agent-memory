@@ -118,3 +118,21 @@ Local only: Go toolchain, temp dirs. No network, no live agent.
 - `HOME` is always set in tests by `runBin` (to `W/home`, which does not exist); tests that want
   `HOME` as the parent must create it.
 - Keep the tree lint-clean (`golangci-lint run ./...`, full tree).
+
+## Post-verification notes (2026-11-19)
+- Built in one pass. Pre-filter green (race tests, full lint 0, tidy, release tests); no existing
+  test touched. Production change about +60 net lines (`store.go`, `seed.go`), `initverb.go`
+  deleted; new tests `cmd/memory/lazy_bin_test.go`, `internal/memory/seed_lazy_test.go`.
+- Verifier: all six criteria PASS through the real binary (40 trials of 8 concurrent first reads, 0
+  failures); 8/8 inverted assertions failed; 16 of 17 wrong implementations caught; tamper and scope
+  clean; govulncheck clean.
+- Recorded as known gaps (III.4), not reworked: argument errors found after the store is open
+  (empty `search` query, invalid `write` stem) come after seeding; dangling-symlink and mode
+  behaviour as built.
+- Not covered by a test: the temp dir's location inside `memory/` (moving it to the parent survives
+  the suite). Low value; left.
+- Builder spec gaps resolved here: D30 got a CLI6 supersession note. Others (rename onto an empty
+  `notes/` racing the seed, EACCES wording, midnight in the byte-equal read) judged not worth
+  pinning.
+- Process: the builder's compound command included `git status` (refused); the lead's banking step
+  ran one `git status` by mistake (no effect).

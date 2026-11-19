@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -61,4 +62,19 @@ func setFlag(fs *flag.FlagSet, arg string, rest []string) (token string, consume
 		return token, 0, fmt.Errorf("%s: invalid value %q: %w", token, value, err)
 	}
 	return token, consumed, nil
+}
+
+// noArgs refuses any argument to a verb that takes none; a lone -- (the
+// end of flags) is allowed.
+func noArgs(verb string, args []string) error {
+	flags := flag.NewFlagSet(verb, flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	pos, _, err := parseArgs(flags, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) > 0 {
+		return fmt.Errorf("%s takes no arguments, got %q", verb, pos[0])
+	}
+	return nil
 }

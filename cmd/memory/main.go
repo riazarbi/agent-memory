@@ -1,7 +1,8 @@
 // Command memory is a long-term memory store, a tree of markdown notes,
 // used on its own or through shell tools (docs/spec/agent-memory.md Part
 // III). The store is <parent>/memory, the parent being --parent-dir given
-// before the verb, else MEMORY_PARENT_DIR, else HOME. Results are XML on
+// before the verb, else MEMORY_PARENT_DIR, else HOME; the parent must exist,
+// and the first call of any verb seeds the store. Results are XML on
 // stdout with exit 0; an error is one line on stderr with exit 1, or exit 75
 // when retrying can succeed (busy, changed on disk). It never logs.
 package main
@@ -32,8 +33,6 @@ const (
 const usage = `usage: memory [--parent-dir DIR] <verb> [arguments]
 
 verbs:
-  init                                  if memory/ is missing, create memory/notes/
-                                        with the first-level nodes; nothing else
   read [STEM] [--block ID] [--depth N]  read a node (depth defaults to 1), or
                                         with no STEM the first-level nodes and tags
   write STEM [--parent P] [--description D] [--tag T]... [--property K=V]...
@@ -49,7 +48,9 @@ The store is <parent>/memory. The parent is --parent-dir DIR (or
 --parent-dir=DIR), given before the verb; else MEMORY_PARENT_DIR from the
 environment; else HOME. A relative parent is taken against the working
 directory. An empty --parent-dir, or a variable set but empty, is an error.
-After the verb, --parent-dir is not an option.
+After the verb, --parent-dir is not an option. The parent must already
+exist. Any verb creates memory/notes/ with the first-level nodes when
+notes/ is missing.
 `
 
 // verb runs one verb's arguments against the store at loc and returns its
@@ -58,7 +59,6 @@ type verb func(loc location, args []string) ([]byte, error)
 
 func verbs() map[string]verb {
 	return map[string]verb{
-		"init":   initVerb,
 		"read":   readVerb,
 		"write":  writeVerb,
 		"search": searchVerb,
