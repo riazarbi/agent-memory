@@ -1856,7 +1856,7 @@ creates a node on its own (III.6).
 | `write` | `STEM [--parent P] [--description D] [--tag T]… [--property K=V]… [--add TEXT]… [--replace ID=TEXT]…` | D29's `memory_write`. `--parent /` is the root: a create under it makes a first-level node (III.6). `--add` and `--replace` are the blocks, in argv order. Any `--tag` replaces the node's tags with the given list. `--property` values are strings. |
 | `search` | `QUERY` | D31's search, with the same syntax and the same result XML. |
 | `index` | none | Prints `<memory_index>`, laid out and budgeted as in D30, or nothing when no node loads. |
-| `lint` | none | Loads the whole store and reports every problem the reader finds (D25), as `<memory_lint>` (III.7). Exit 0 when there are no errors, 2 when there are. Writes nothing. |
+| `lint` | `[--exit-zero]` | Loads the whole store and reports every problem the reader finds (D25), as `<memory_lint>` (III.7). Exit 0 when there are no errors, 2 when there are (0 regardless with `--exit-zero`). Writes nothing. |
 
 - **Argument errors name the argument as the user typed it** (`STEM`, `--parent`, `--add #2`,
   `--replace m-abc123`), never the writer's internal field names.
@@ -1890,7 +1890,7 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 
 | Repo file | Copied to | What it is |
 |---|---|---|
-| `agent/tools/memory_read.json`, `memory_write.json`, `memory_search.json`, `memory_index.json` | `<state dir>/tools/` | The shell tools. |
+| `agent/tools/memory_read.json`, `memory_write.json`, `memory_search.json`, `memory_index.json`, `memory_lint.json` | `<state dir>/tools/` | The shell tools (`memory_lint.json`: III.7). |
 | `agent/prompt/memory_usage.md` | `<state dir>/prompt/` | The guidance: when and what to save (the §4.5 text, verbatim). A `prompt/` fragment, loaded every turn. |
 | `agent/livecontext/memory_index.json` | `<state dir>/livecontext/` | The index at the start of each input. |
 | `agent/memory/notes/<stem>/<stem>.md` for `user`, `projects`, `people`, `topics` | `<state dir>/memory/notes/` | An optional starting tree (III.6), copied only into a store that does not exist yet. |
@@ -2030,7 +2030,8 @@ another way can: an editor or Obsidian, a git merge, a sync conflict, a script. 
 skips what it cannot load (D25), and a skipped node silently disappears from `read`, `search` and
 `index`. `lint` reports it.
 
-- **`memory [--parent-dir DIR] lint`**, no arguments (any argument is an error, exit 1). It loads
+- **`memory [--parent-dir DIR] lint [--exit-zero]`**. Its one option is `--exit-zero` (CLI9); any
+  other argument is an error, exit 1. It loads
   the store fresh, as every verb does, and prints:
   ```xml
   <memory_lint nodes="41" errors="1" warnings="2">
@@ -2051,14 +2052,31 @@ skips what it cannot load (D25), and a skipped node silently disappears from `re
   stdout, when `lint` itself cannot run (an argument, a resolution or missing-parent error, `memory/`
   or `notes` not a directory). So `memory --parent-dir DIR lint || alert` fails exactly when nodes
   are missing from the store or the check could not run.
+- **`--exit-zero`** (CLI9, the flake8/ruff convention): the same report, but exit 0 whenever the
+  report was produced, errors or not. A failure to run is still exit 1. It exists for callers that
+  discard a command's output when it exits non-zero — the agent's shell tools do
+  (`internal/tools/shell_tools.go` in the agent repo), so a tool running plain `lint` would show the
+  model `exit status 2` and never the report.
 - **A missing store** is empty (III.1): `nodes="0" errors="0" warnings="0"`, exit 0.
 - **It writes nothing** and creates nothing: no lock file, no store. It does not take the write
   lock; every write replaces files by atomic rename, so a concurrent write is seen either before or
   after.
 - **Report only.** `lint` never repairs. It checks what the reader checks (D25), not what Obsidian
   thinks, and not whether content is true or current (the audit's job, §6).
-- **No tool file ships for it.** It is an operator's check (a cron job, a git hook, an agent timer
-  job). An operator may still wrap it as a shell tool or a live-context entry like any verb.
+- **The tool file** (CLI9, operator ruling 2026-11-19): `agent/tools/memory_lint.json` lets the
+  agent check its own store, for example after the operator has edited notes by hand. It is an argv
+  shell tool with `"command": "memory"`, `prepend_args`
+  `["--parent-dir", "${AGENT_STATE_DIR}", "lint", "--exit-zero"]`, `read_only: true`,
+  `allow_user_args: false`, `forbidden_args: []`, and this description:
+  > Check your durable memory for problems. Lists every problem in the store, each with the node's
+  > path and the reason. An error means that node, and everything under it, could not be loaded: it
+  > is missing from your memory until it is fixed, and your memory tools cannot fix it, so tell the
+  > operator. A warning means the node loaded but something is off: a link to a missing node (fix it
+  > by creating that node or rewriting the block), a block ID used twice, or a file that is not a
+  > node (tell the operator). errors="0" warnings="0" means the store is clean. Takes no arguments.
+
+  It never mentions exit 75 (`lint` cannot be busy) or `--exit-zero`. Installing it is optional,
+  like every tool file; a cron job or git hook uses plain `lint` and its exit code.
 
 ## 5. Decisions
 

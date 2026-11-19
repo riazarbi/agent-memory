@@ -30,6 +30,7 @@ var agentFiles = []string{
 	"memory/notes/user/user.md",
 	"prompt/memory_usage.md",
 	"tools/memory_index.json",
+	"tools/memory_lint.json",
 	"tools/memory_read.json",
 	"tools/memory_search.json",
 	"tools/memory_write.json",
@@ -161,9 +162,9 @@ func TestAgentReadmeNamesEveryFile(t *testing.T) {
 	}
 	readme := string(data)
 	want := []string{
-		// the five shipped paths
+		// the shipped paths
 		"tools/memory_read.json", "tools/memory_write.json", "tools/memory_search.json",
-		"tools/memory_index.json", "prompt/memory_usage.md", "livecontext/memory_index.json",
+		"tools/memory_index.json", "tools/memory_lint.json", "prompt/memory_usage.md", "livecontext/memory_index.json",
 		// the three destinations
 		"<state dir>/tools/", "<state dir>/prompt/", "<state dir>/livecontext/",
 		// substitution, and what an older agent shows (Part III.1)

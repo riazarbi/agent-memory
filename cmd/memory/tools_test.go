@@ -43,7 +43,9 @@ var shellToolKeys = map[string]bool{
 	"prepend_args": true, "forbidden_args": true, "allow_user_args": true,
 }
 
-// shippedTools is each file in tools/ and the verb it runs.
+// shippedTools is each file in tools/ that runs its verb with no pinned
+// option, and that verb. memory_lint.json (lint --exit-zero, III.7) has its
+// own checks.
 var shippedTools = map[string]string{
 	"memory_read.json":   "read",
 	"memory_write.json":  "write",
@@ -114,7 +116,7 @@ func TestToolFilesSchema(t *testing.T) {
 	for _, e := range entries {
 		names = append(names, e.Name())
 	}
-	check(t, "files in agent/tools/", names, []string{"memory_index.json", "memory_read.json", "memory_search.json", "memory_write.json"})
+	check(t, "files in agent/tools/", names, []string{"memory_index.json", "memory_lint.json", "memory_read.json", "memory_search.json", "memory_write.json"})
 
 	for file, verb := range shippedTools {
 		tool := loadTool(t, filepath.Join(dir, file))
