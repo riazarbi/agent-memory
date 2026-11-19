@@ -1,7 +1,8 @@
 # CI gates every pull request into main, and runs again on every push to main.
 # A push to main that passes every check is released: tagged YYYYMMDD (.2, .3
-# for later same-day releases), with the memory binaries and the
-# CHANGELOG lines the merge added published as a GitHub Release. No image.
+# for later same-day releases), with the release archives (each the memory
+# binary plus the repo's agent/ folder), checksums.txt and the CHANGELOG
+# lines the merge added published as a GitHub Release. No image.
 name: ci
 
 on:

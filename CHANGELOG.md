@@ -3,6 +3,24 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-19 - CLAUDE.md requires the docs and agent/ files to change with the code
+
+- `CLAUDE.md`: new section "Docs and agent files travel with the code". A change to what a verb
+  accepts, prints, creates, or how it fails updates, in the same change, the spec (first), the
+  usage text, `README.md`, `agent/README.md`, the tool and live-context files, the guidance
+  (byte-equal to spec §4.5) and the starting tree (byte-equal to `write`'s output), and the
+  CHANGELOG names what was checked. Why: `agent/` is copied into agents as it is and its texts are
+  read by the model every turn, and tests pin only part of it, so a green gate can hide stale
+  docs. It also restates III.6's rule that model-facing text never names a node. The intro no
+  longer says tool files are "seeded into the agent's `tools/`" (pre-CLI5 wording): everything
+  ships in `agent/` and is installed by hand.
+- `.github/workflows/ci.yml`: the header comment says releases carry the archives (binary plus
+  `agent/`) and `checksums.txt`, as the job already did. Comment only; no job changed.
+- Audit, no change needed: `README.md` and `agent/README.md` match CLI10's behaviour;
+  `agent/memory/notes/` lints clean and is byte-equal to fresh `write --parent /` output. The root
+  `notes/` needs no `.md` file: a file directly in `notes/` is a stray (a `lint` warning), and the
+  root has no content by design (spec III.6).
+
 ## 2026-11-19 - An empty memory says so: every verb creates a missing store, and `index` on it prints `<empty>No nodes yet.</empty>`
 
 - `cmd/memory/store.go`: one path to the store for every verb (spec
