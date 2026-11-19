@@ -82,49 +82,6 @@ func withDirs(prefix string, files []string) []string {
 	return out
 }
 
-// Acceptance criterion 1: on a fresh parent, init creates memory/notes/ with
-// the four first-level nodes and nothing else, in memory/ or beside it.
-func TestInitTouchesOnlyNotes(t *testing.T) {
-	dir := t.TempDir()
-	mustSucceed(t, runBin(t, dir, nil, "init"))
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	top := make([]string, 0, len(entries))
-	for _, e := range entries {
-		top = append(top, e.Name())
-	}
-	check(t, "the working dir after init", top, []string{".agent"})
-	want := withDirs("", []string{
-		"memory/notes/people/people.md",
-		"memory/notes/projects/projects.md",
-		"memory/notes/topics/topics.md",
-		"memory/notes/user/user.md",
-	})
-	check(t, "the parent after init", treeUnder(t, filepath.Join(dir, ".agent")), want)
-}
-
-// Acceptance criterion 1: init's help says it seeds notes/, and nothing about
-// the guidance it no longer writes.
-func TestUsageSaysInitSeedsNotes(t *testing.T) {
-	var line string
-	for _, l := range strings.Split(usage, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(l), "init ") {
-			line = l
-		}
-	}
-	if !strings.Contains(line, "notes/") {
-		t.Errorf("usage's init line %q does not say it seeds notes/", line)
-	}
-	for _, s := range []string{"protocol", "usage.md", "guidance"} {
-		if strings.Contains(usage, s) {
-			t.Errorf("usage mentions %q:\n%s", s, usage)
-		}
-	}
-}
-
 // guidanceMarker introduces §4.5's fenced guidance text in the spec.
 const guidanceMarker = "shipped verbatim as `agent/prompt/memory_usage.md`"
 
@@ -205,9 +162,8 @@ func TestAgentReadmeNamesEveryFile(t *testing.T) {
 		"tools/memory_index.json", "prompt/memory_usage.md", "livecontext/memory_index.json",
 		// the three destinations
 		"<state dir>/tools/", "<state dir>/prompt/", "<state dir>/livecontext/",
-		// init first; substitution, and what an older agent shows
-		"memory --parent-dir <state dir> init",
-		"${AGENT_STATE_DIR}", "memory has no notes/ folder; run memory init",
+		// substitution, and what an older agent shows (Part III.1)
+		"${AGENT_STATE_DIR}", "parent dir ${AGENT_STATE_DIR} does not exist (from --parent-dir)",
 	}
 	for _, s := range want {
 		if !strings.Contains(readme, s) {
@@ -274,19 +230,18 @@ func checkInstalled(t *testing.T, state string) {
 }
 
 // Acceptance criterion 4: the commands agent/README.md gives, run from agent/
-// with <state dir> filled in and memory on the PATH, seed the store and put
+// with <state dir> filled in and memory on the PATH, put
 // every shipped file, unchanged, where III.4 says.
 func TestAgentReadmeCommandsInstall(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(repoRoot(t), "agent", "README.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := runCommands(t, filepath.Join(repoRoot(t), "agent"), bashBlocks(string(data)))
-	isStore(t, state)
-	checkInstalled(t, state)
+	// Installing is a copy; the store is created by the first call (III.1).
+	checkInstalled(t, runCommands(t, filepath.Join(repoRoot(t), "agent"), bashBlocks(string(data))))
 }
 
-// Step 1 of the README says what an archive holds, step 4 gives the copy
+// Step 1 of the README says what an archive holds, step 3 gives the copy
 // commands from agent/, and nothing still sends the operator to usage.md.
 func TestReadmeAgentFolder(t *testing.T) {
 	root := repoRoot(t)
@@ -303,8 +258,8 @@ func TestReadmeAgentFolder(t *testing.T) {
 			t.Errorf("step 1 does not say the archive holds %q", s)
 		}
 	}
-	// Step 4's commands, run from the folder holding agent/, install it all.
-	checkInstalled(t, runCommands(t, root, bashBlocks(bodies[3])))
+	// Step 3's commands, run from the folder holding agent/, install it all.
+	checkInstalled(t, runCommands(t, root, bashBlocks(bodies[2])))
 	for _, s := range []string{"protocol/usage.md", "cp tools/"} {
 		if strings.Contains(string(data), s) {
 			t.Errorf("README.md still mentions %q", s)

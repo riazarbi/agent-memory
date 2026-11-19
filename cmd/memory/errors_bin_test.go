@@ -99,44 +99,6 @@ func TestReadArgumentErrors(t *testing.T) {
 	}
 }
 
-// A store without notes/ gives the corrective error for read, and creates
-// nothing: no notes/, no lock file, no memory/ or state dir.
-func TestReadWithoutNotes(t *testing.T) {
-	const want = "memory has no notes/ folder; run memory init"
-	t.Run("memory/ without notes/", func(t *testing.T) {
-		dir := t.TempDir()
-		store := filepath.Join(dir, ".agent", "memory")
-		writeFile(t, filepath.Join(store, "protocol", "usage.md"), "guidance\n")
-		ageTree(t, filepath.Join(dir, ".agent"))
-		before := snapshot(t, filepath.Join(dir, ".agent"))
-		for _, args := range [][]string{{"read"}, {"read", "user"}, {"read", "user", "--block", "m-aaaaa1"}} {
-			if line := mustFail(t, runBin(t, dir, nil, args...)); line != want {
-				t.Errorf("%v: stderr %q, want %q", args, line, want)
-			}
-		}
-		sameSnapshot(t, before, snapshot(t, filepath.Join(dir, ".agent")))
-		if exists(filepath.Join(store, "notes")) {
-			t.Error("read created notes/")
-		}
-	})
-	t.Run("no memory/ at all", func(t *testing.T) {
-		dir := t.TempDir()
-		if line := mustFail(t, runBin(t, dir, nil, "read")); line != want {
-			t.Errorf("stderr %q, want %q", line, want)
-		}
-		if exists(filepath.Join(dir, ".agent")) {
-			t.Error("read created the state dir")
-		}
-	})
-	t.Run("notes/ is a file", func(t *testing.T) {
-		dir := t.TempDir()
-		writeFile(t, filepath.Join(dir, ".agent", "memory", "notes"), "not a folder\n")
-		if line := mustFail(t, runBin(t, dir, nil, "read")); line != want {
-			t.Errorf("stderr %q, want %q", line, want)
-		}
-	})
-}
-
 // A seeded store being read writes nothing either: no lock file appears.
 func TestReadWritesNothing(t *testing.T) {
 	dir, _ := seeded(t)
@@ -156,7 +118,7 @@ func TestUsage(t *testing.T) {
 		if r.code != 1 || r.stdout != "" {
 			t.Errorf("%v: exit %d, stdout %q; want 1 and empty", args, r.code, r.stdout)
 		}
-		if !strings.Contains(r.stderr, "usage: memory") || !strings.Contains(r.stderr, "init") || !strings.Contains(r.stderr, "read [STEM]") {
+		if !strings.Contains(r.stderr, "usage: memory") || !strings.Contains(r.stderr, "read [STEM]") {
 			t.Errorf("%v: stderr %q is not the usage text", args, r.stderr)
 		}
 	}

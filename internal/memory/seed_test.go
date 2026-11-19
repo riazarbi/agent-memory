@@ -81,23 +81,6 @@ func TestSeedDefaults_RerunChangesNothing(t *testing.T) {
 	}
 }
 
-func TestSeedDefaults_EmptyMemoryDirSeedsNothing(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "memory")
-	if err := os.Mkdir(dir, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := SeedDefaults(dir); err != nil {
-		t.Fatal(err)
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(entries) != 0 {
-		t.Errorf("seeded into an existing memory/: %v", entries)
-	}
-}
-
 // snapshot maps every path under root to its content and mode, so a
 // rerun that rewrites a file with the same bytes is still caught by
 // mtime.

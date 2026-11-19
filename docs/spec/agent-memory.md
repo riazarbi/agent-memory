@@ -1810,7 +1810,7 @@ Rules, exactly:
   (`no store: give --parent-dir, or set MEMORY_PARENT_DIR or HOME`).
 - `--parent-dir` with no value, or given twice before the verb, is an error naming it.
 - **After the verb, `--parent-dir` is not an option.** Each verb's own argument rules apply, so it is
-  an unknown flag (`init`, `read`, `write`, `index`), or part of `search`'s one verbatim argument.
+  an unknown flag (`read`, `write`, `index`), or part of `search`'s one verbatim argument.
   It never changes the store. This is what lets a tool file pin the store: `prepend_args` ends with
   the verb, and the model's arguments always come after it.
 - No `.env` is read, and no agent variable (`AGENT_STATE_DIR`) is consulted.
@@ -1818,15 +1818,45 @@ Rules, exactly:
 
 Why: an environment variable cannot say where it came from, so an agent's store must not depend on
 what the operator's shell happens to export. The agent-specific choice lives in the tool files
-(III.4), which name the agent's state dir explicitly; standalone use is `memory init` (giving
+(III.4), which name the agent's state dir explicitly; standalone use is plain `memory read` (giving
 `~/memory`) or `export MEMORY_PARENT_DIR=…`. A clone for A/B work (D24) is reached with a different
 `--parent-dir`.
+
+**The store is created on first use** (CLI6, operator ruling 2026-11-19; it replaces the `init`
+verb). There is no install step: every verb seeds the store it resolved when that store has no
+`notes/`, then does its job.
+
+- **The parent must already exist.** After resolution, `<parent>` must exist and be a directory
+  (symlinks followed). Otherwise the call fails, creating nothing, with
+  `parent dir <parent> does not exist (from <source>)` or
+  `parent dir <parent> is not a directory (from <source>)`, where `<parent>` is the value as given
+  (a relative one stays relative) and `<source>` is `--parent-dir`, `MEMORY_PARENT_DIR` or `HOME`.
+  `memory` creates `memory/` inside the parent, never the parent itself, so a mistyped
+  `--parent-dir` or `MEMORY_PARENT_DIR` (or an agent that passed `${AGENT_STATE_DIR}` literally)
+  fails loudly instead of starting a new store somewhere unexpected.
+- **The trigger is `notes/`.** When `<parent>/memory/notes` does not exist, the verb creates it with
+  the seed first level (D19: `user`, `projects`, `people`, `topics`, each a description and no
+  blocks, exactly as a `write` would encode it), creating `<parent>/memory` first if it is missing.
+  Nothing else is created, in `memory/` or beside it, and entries already in `memory/` are left as
+  they are. When `notes/` exists — even empty, even missing a first-level node — nothing is seeded,
+  so a deleted first-level node stays deleted. Deleting `notes/` itself resets the store: the next
+  call seeds it again.
+- **Seeding is atomic.** `notes/` is built in a hidden temporary directory inside `memory/` and
+  renamed into place, so a failed seed leaves no partial `notes/`, and of two calls seeding at once
+  one wins and both succeed on the winner's `notes/`.
+- **Seeding is silent.** A call that seeded prints exactly what it would on a store seeded
+  beforehand, with nothing on stderr. `read` on a fresh store shows the four first-level nodes.
+- **Errors come first.** An argument error (III.2), a resolution error (above) or a missing or
+  non-directory parent creates nothing. `memory/` or `memory/notes` existing as something other than
+  a directory is an error naming that path (`<path> is not a directory`), and creates nothing.
+- Every verb seeds, the read-only ones (`read`, `search`, `index`) included: the first call of any
+  kind creates the store. Once it exists, `read`, `search` and `index` write nothing (no lock file
+  either).
 
 ## III.2 Verbs
 
 | Verb | Arguments | Does |
 |---|---|---|
-| `init` | none | If `memory/` is missing, creates `memory/notes/` with the seed first level (D19), and nothing else. If it exists, changes nothing. Prints what it did. |
 | `read` | `[STEM] [--block ID] [--depth N]` | D29's `memory_read`: the same result XML, and with no `STEM` the root. `--depth` defaults to 1. |
 | `write` | `STEM [--parent P] [--description D] [--tag T]… [--property K=V]… [--add TEXT]… [--replace ID=TEXT]…` | D29's `memory_write`. `--add` and `--replace` are the blocks, in argv order. Any `--tag` replaces the node's tags with the given list. `--property` values are strings. |
 | `search` | `QUERY` | D31's search, with the same syntax and the same result XML. |
@@ -1847,7 +1877,8 @@ what the operator's shell happens to export. The agent-specific choice lives in 
 
 - **Success:** XML on stdout (D20 renderings), exit 0.
 - **Error:** one line on stderr, exit 1. Unknown stems list up to five near matches. A missing
-  `memory/notes/` says `memory has no notes/ folder; run memory init`.
+  parent says `parent dir <parent> does not exist (from <source>)` (III.1); a missing `notes/` is
+  not an error, it is seeded.
 - **Retry:** "busy" and "changed on disk" (D28) go to stderr with exit 75 (`EX_TEMPFAIL`).
 - **No logging, no events.** The agent's own `tool.invoked` and `tool.error` record each call. The
   `memory.*` events of Part II are not emitted.
@@ -1871,7 +1902,8 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
   (`allow_user_args: false`). Their descriptions are D29's and D31's, adapted to flags, and never
   mention `--parent-dir`. The agent replaces `${AGENT_STATE_DIR}` with its absolute state dir (agent
   spec `child-environment.md` E3, agent CHANGELOG 2026-11-19); an older agent passes the text
-  literally, and every call then fails with `memory has no notes/ folder; run memory init`. To point
+  literally, and every call then fails with
+  `parent dir ${AGENT_STATE_DIR} does not exist (from --parent-dir)`. To point
   an agent at another store (a store shared by several agents), the operator edits the path in its
   tool files and its live-context entry. Installing a file is the grant (D13); leaving one out
   removes that capability.
@@ -1887,10 +1919,6 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
   from a download alone.
 
 **Known gaps, recorded not fixed** (CLI1 acceptance, 2026-11-18):
-- A `memory/` that exists without `notes/` loops: `read` says "run memory init", and `init`
-  (D19's directory contract) says nothing was needed. The operator must fix it by hand.
-- Concurrent `init`s on a fresh directory can each report `seeded="true"`. The store is still seeded
-  exactly once and correctly.
 - Nodes the loader skips do not appear in `read`, and nothing reports them: Part III has no channel
   for `Store.Problems()`.
 - (CLI2) Some of the writer's reason texts keep the JSON tool's wording ("omit the id to add a new
@@ -1900,9 +1928,6 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 - (CLI2) `search` takes its query as one verbatim argument, so a query starting with `-` is a
   query, not a flag. A leading `--` is dropped.
 
-- (CLI3) `index` on a store without `notes/` gives Part III.3's error (exit 1), like the other
-  verbs. As a livecontext entry before `init`, it shows that error on every input. Run `init`
-  first.
 - (CLI3) If the trust line, the notice and `<tags>` alone exceed the budget (50 very long tags),
   `index` drops every entry and prints the result over budget.
 - (CLI3) All four tool descriptions say exit 75 means "run again", though only `write` can return
@@ -1912,9 +1937,14 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 - (CLI4) A store outside an agent's state dir (shared by several agents) is not covered by the
   agent's state-dir write deny: that agent's file tools can edit notes directly, bypassing `write`'s
   checks and lock.
-- (CLI4) `memory --parent-dir --parent-dir init` takes the second `--parent-dir` as the directory
-  (as every flag here takes its next argument), creating `./--parent-dir/memory`. No tool file can
-  produce it.
+- (CLI4) `memory --parent-dir --parent-dir read` takes the second `--parent-dir` as the directory
+  (as every flag here takes its next argument). Since CLI6 that fails unless a directory named
+  `--parent-dir` exists. No tool file can produce it.
+- (CLI6) The read-only verbs create the store on first use, so `memory read` in a fresh home
+  directory leaves a `~/memory`. Accepted: it happens once, and it is what makes an install step
+  unnecessary.
+- (CLI6) A crash mid-seed can leave a hidden `.notes-seed-*` directory inside `memory/`. The reader
+  walks only `notes/`, so it is inert; the operator may delete it.
 - (CLI4) An operator who deletes the `--parent-dir` pair from a tool file points the agent at
   `$HOME/memory`, which may be a human's personal store.
 
@@ -1947,7 +1977,7 @@ Superseded decisions keep their number; the row says what changed and why.
 | D16 | Write path | Memory lives in `memory/notes/` and is written only by the memory tools, scoped to it so their permissions never reach `usage.md`. The general file tools are closed on the whole state dir ([`state-dir-write-deny.md`](state-dir-write-deny.md)); shell tools out of scope. |
 | D17 | Obsidian validity | **Enforced**: `notes/` is always a valid vault. Kebab-case stems, typed frontmatter (text, list, number, checkbox, date, datetime; no nested objects; meaning given only to `description` and `tags`), Obsidian tag syntax, `[[stem]]` / `[[stem\|alias]]` / `[[stem#^id]]` links; `name` dropped; embeds and query DSLs rejected. Checked at write, warned at render. |
 | D18 | Blocks | Nodes contain addressable blocks: one paragraph ending in an Obsidian `^id` — `m-` + 6 base-36 chars, harness-assigned, stable, unique store-wide. Inline `#tags` per block. Block text is opaque to the harness. Atomicity (how much a block holds) is protocol convention; the default is one claim per block. |
-| D19 | Seeded ontology | The seed tree is the starting ontology and part of the protocol bundle: shippable, not hard-coded. Changing the first level is a restructuring operation, available only where a protocol grants it; the default protocol grants it to no run. No `type` field and no derived type in the harness. Default seed: `user` / `projects` / `people` / `topics`. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: `init` seeds `notes/` only, and the guidance ships as `agent/prompt/memory_usage.md`.)* |
+| D19 | Seeded ontology | The seed tree is the starting ontology and part of the protocol bundle: shippable, not hard-coded. Changing the first level is a restructuring operation, available only where a protocol grants it; the default protocol grants it to no run. No `type` field and no derived type in the harness. Default seed: `user` / `projects` / `people` / `topics`. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: the guidance ships as `agent/prompt/memory_usage.md`, and since CLI6 any verb seeds `notes/` on first use (III.1); there is no `init`.)* |
 | D20 | Wire formats | XML for everything the harness renders, built with Go's standard `encoding/xml` (no hand-assembled XML: note text containing `<`, `&` or quotes must always escape correctly; no new dependency); JSON arguments (the protocol's envelope) with simple fields and plain-text content. Search queries use an Obsidian search-syntax subset. |
 | D21 | Lineage | Plan 9 (§4.1): the memory tools are a file server's verbs; reading a node returns content and children; the index is a synthetic file; capability is what is bound into the namespace. |
 | D22 | Cache | The index stays in the system prompt; the cached prompt is discarded once per store mutation, accepted. Render once per input; absolute dates only. Moving the index to the end of the request (spliced into the user message) stays open. |
@@ -1957,9 +1987,9 @@ Superseded decisions keep their number; the row says what changed and why.
 | D26 | Frontmatter round-trip | Hybrid: a write changing no frontmatter field copies its bytes exactly; one that changes fields re-emits from the YAML node tree, keeping every other property's value, type, tag, order, scalar form and comments. The read model keeps raw frontmatter text and each property's YAML nodes. §4.2 *Round-trip of frontmatter*. |
 | D27 | Encoding nodes | A pure encoder: crypto-random `m-` IDs unique store-wide; a fixed layout for new nodes; byte-identical output for an unchanged node; untouched blocks keep their exact lines; frontmatter changes re-emitted per D26 (tags replace, properties merge); BOM and line ending kept; validation before output; everything emitted reads back clean. §4.2 *Encoding nodes*. |
 | D28 | Writing to disk | An exclusive OS lock (`flock` on `notes/.write.lock`, bounded 10 s wait, then "busy — retry") serializes writes across processes; one writer per `notes/` per process; each write from a fresh full load; create vs update by stem existence (create: valid unused stem, description, a loaded non-root parent; update: parent absent or matching); writes to skipped nodes refused; atomic temp-file-and-rename; refuse if the file changed on disk since it was read; read back through a full load and roll back on failure. §4.2 *Writing to disk*. |
-| D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: `init` seeds `notes/` only, and the guidance ships as `agent/prompt/memory_usage.md`.)* |
+| D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: the guidance ships as `agent/prompt/memory_usage.md`, and since CLI6 any verb seeds `notes/` on first use (III.1); there is no `init`.)* |
 | D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. |
-| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `init`, `read`, `write`, `search` and `index`. The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1 and 75 (retry). There is no logging and no capability line. |
+| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `read`, `write`, `search` and `index`; the first call seeds the store (CLI6). The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1 and 75 (retry). There is no logging and no capability line. |
 | D31 | `memory_search` | Opt-in built-in (catalogued, never seeded, no generation bump); one `query` argument in an Obsidian syntax subset (words, phrases, `-`, `OR`, `tag:`, `path:`, `file:`, `[property:value]`, no parentheses); per-node matching, hit blocks, ranking by hits then recency; 20 nodes / 5 blocks; XML via `encoding/xml`; `memory.searched`. §4.5 *`memory_search`, exactly*. |
 
 ## 6. Out of scope, deferred, open

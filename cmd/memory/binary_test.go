@@ -196,14 +196,6 @@ type xRoot struct {
 	Tags    *string  `xml:"tags"`
 }
 
-type xInit struct {
-	XMLName xml.Name
-	Store   string   `xml:"store,attr"`
-	Seeded  string   `xml:"seeded,attr"`
-	Created []string `xml:"created"`
-	Text    string   `xml:",chardata"`
-}
-
 func decode(t *testing.T, out string, v any) {
 	t.Helper()
 	if err := xml.Unmarshal([]byte(out), v); err != nil {

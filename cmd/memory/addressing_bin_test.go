@@ -64,13 +64,13 @@ func readsRoot(t *testing.T, r result) {
 func TestParentDirFlagWins(t *testing.T) {
 	for _, spelling := range [][]string{{"--parent-dir", "P"}, {"--parent-dir=P"}} {
 		w := t.TempDir()
-		p := filepath.Join(w, "p")
+		p := mkdirs(t, filepath.Join(w, "p"))[0]
 		dirs := mkdirs(t, filepath.Join(w, "q"), filepath.Join(w, "h"))
 		env := map[string]string{"MEMORY_PARENT_DIR": dirs[0], "HOME": dirs[1]}
 		flag := slices.Clone(spelling)
 		flag[len(flag)-1] = strings.Replace(flag[len(flag)-1], "P", p, 1)
 
-		mustSucceed(t, runBin(t, w, env, append(flag, "init")...))
+		mustSucceed(t, runBin(t, w, env, append(flag, "index")...))
 		isStore(t, p)
 		isEmptyDir(t, spelling[0]+": Q", dirs[0])
 		isEmptyDir(t, spelling[0]+": H", dirs[1])
@@ -81,9 +81,9 @@ func TestParentDirFlagWins(t *testing.T) {
 	}
 
 	w := t.TempDir()
-	dirs := mkdirs(t, filepath.Join(w, "q"), filepath.Join(w, "h"))
+	dirs := mkdirs(t, filepath.Join(w, "q"), filepath.Join(w, "h"), filepath.Join(w, "rel"))
 	env := map[string]string{"MEMORY_PARENT_DIR": dirs[0], "HOME": dirs[1]}
-	mustSucceed(t, runBin(t, w, env, "--parent-dir", "rel", "init"))
+	mustSucceed(t, runBin(t, w, env, "--parent-dir", "rel", "index"))
 	isStore(t, filepath.Join(w, "rel"))
 	isEmptyDir(t, "relative: Q", dirs[0])
 	isEmptyDir(t, "relative: H", dirs[1])
@@ -96,7 +96,7 @@ func TestParentFromEnvironment(t *testing.T) {
 	w := t.TempDir()
 	dirs := mkdirs(t, filepath.Join(w, "q"), filepath.Join(w, "h"))
 	env := map[string]string{"MEMORY_PARENT_DIR": dirs[0], "HOME": dirs[1]}
-	mustSucceed(t, runBin(t, w, env, "init"))
+	mustSucceed(t, runBin(t, w, env, "index"))
 	isStore(t, dirs[0])
 	if exists(filepath.Join(dirs[0], "notes")) {
 		t.Error("MEMORY_PARENT_DIR was taken as the store itself")
@@ -107,7 +107,7 @@ func TestParentFromEnvironment(t *testing.T) {
 	w = t.TempDir()
 	h := mkdirs(t, filepath.Join(w, "h"))[0]
 	env = map[string]string{"MEMORY_PARENT_DIR": envUnset, "HOME": h}
-	mustSucceed(t, runBin(t, w, env, "init"))
+	mustSucceed(t, runBin(t, w, env, "index"))
 	isStore(t, h)
 	if exists(filepath.Join(h, "notes")) {
 		t.Error("HOME was taken as the store itself")
@@ -141,7 +141,7 @@ func failsCleanly(t *testing.T, env map[string]string, args []string, want ...st
 // a fall-through, and so is having no source at all.
 func TestEmptyOrMissingParent(t *testing.T) {
 	writeArgs := []string{"write", "kettle", "--parent", "topics", "--description", "d", "--add", "a"}
-	for _, verb := range [][]string{{"init"}, {"read"}, writeArgs} {
+	for _, verb := range [][]string{{"index"}, {"read"}, writeArgs} {
 		failsCleanly(t, map[string]string{"MEMORY_PARENT_DIR": ""}, verb, "MEMORY_PARENT_DIR is set but empty")
 		failsCleanly(t, map[string]string{"MEMORY_PARENT_DIR": envUnset, "HOME": ""}, verb, "HOME is set but empty")
 		failsCleanly(t, nil, append([]string{"--parent-dir", ""}, verb...), "--parent-dir")
@@ -155,15 +155,16 @@ func TestEmptyOrMissingParent(t *testing.T) {
 // verb, is an error naming it; the last occurrence never wins.
 func TestMalformedParentDir(t *testing.T) {
 	failsCleanly(t, nil, []string{"--parent-dir"}, "--parent-dir")
-	failsCleanly(t, nil, []string{"--parent-dir", "p", "--parent-dir", "q", "init"}, "--parent-dir")
-	failsCleanly(t, nil, []string{"--parent-dir=p", "--parent-dir=q", "init"}, "--parent-dir")
+	failsCleanly(t, nil, []string{"--parent-dir", "p", "--parent-dir", "q", "read"}, "--parent-dir")
+	failsCleanly(t, nil, []string{"--parent-dir=p", "--parent-dir=q", "read"}, "--parent-dir")
 
 	// With both stores seeded, a read that let either occurrence win would
 	// succeed.
 	w := t.TempDir()
 	p, q := filepath.Join(w, "p"), filepath.Join(w, "q")
-	mustSucceed(t, runBin(t, w, nil, "--parent-dir", p, "init"))
-	mustSucceed(t, runBin(t, w, nil, "--parent-dir", q, "init"))
+	mkdirs(t, p, q)
+	mustSucceed(t, runBin(t, w, nil, "--parent-dir", p, "index"))
+	mustSucceed(t, runBin(t, w, nil, "--parent-dir", q, "index"))
 	before := snapshot(t, w)
 	line := mustFail(t, runBin(t, w, nil, "--parent-dir", p, "--parent-dir", q, "read"))
 	sameSnapshot(t, before, snapshot(t, w))
@@ -180,7 +181,6 @@ func TestParentDirAfterVerb(t *testing.T) {
 	for _, args := range [][]string{
 		{"read", "--parent-dir", x},
 		{"index", "--parent-dir", x},
-		{"init", "--parent-dir", x},
 		{"write", "kettle", "--parent-dir", x, "--description", "d", "--add", "a"},
 		{"write", "kettle", "--parent-dir=" + x, "--parent", "topics", "--description", "d", "--add", "a"},
 		{"--parent-dir", filepath.Join(w, ".agent"), "read", "--parent-dir", x},
@@ -221,7 +221,7 @@ func TestNoAgentAwareness(t *testing.T) {
 		"AGENT_STATE_DIR":   filepath.Join(w, "s"),
 		"MEMORY_DIR":        filepath.Join(w, "m"),
 	}
-	mustSucceed(t, runBin(t, w, env, "init"))
+	mustSucceed(t, runBin(t, w, env, "index"))
 	isStore(t, h)
 	entries, err := os.ReadDir(w)
 	if err != nil {
@@ -231,7 +231,7 @@ func TestNoAgentAwareness(t *testing.T) {
 	for _, e := range entries {
 		top = append(top, e.Name())
 	}
-	check(t, "entries in the working dir after init", top, []string{".env", "h"})
+	check(t, "entries in the working dir after the first call", top, []string{".env", "h"})
 
 	r := runBin(t, w, env)
 	if r.code != 1 || r.stdout != "" {
@@ -259,7 +259,7 @@ func TestParseLocation(t *testing.T) {
 	}{
 		{[]string{"read", "--parent-dir", "x"}, "", []string{"read", "--parent-dir", "x"}},
 		{[]string{"--parent-dir=a=b", "read"}, "a=b", []string{"read"}},
-		{[]string{"--parent-dir", "-x", "init", "--parent-dir=y"}, "-x", []string{"init", "--parent-dir=y"}},
+		{[]string{"--parent-dir", "-x", "read", "--parent-dir=y"}, "-x", []string{"read", "--parent-dir=y"}},
 		{[]string{"--parent-dir", "p"}, "p", []string{}},
 		{[]string{"-parent-dir", "p", "read"}, "", []string{"-parent-dir", "p", "read"}},
 	}

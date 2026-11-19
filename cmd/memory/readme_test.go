@@ -13,7 +13,7 @@ import (
 
 // wiringSteps is the README wiring guide's steps, in order, each found by a
 // word its heading must hold (case-insensitive).
-var wiringSteps = []string{"install", "path", "init", "agent"}
+var wiringSteps = []string{"install", "path", "agent"}
 
 // readmeSection returns the body of the "## <title…>" section, up to the
 // next "## " heading.
@@ -42,7 +42,7 @@ func splitSteps(section string) (headings, bodies []string) {
 }
 
 // Acceptance criterion 4: the README's wiring guide documents install,
-// PATH, init, copying the tool files, placing usage.md and a live-context
+// PATH, copying the tool files, placing usage.md and a live-context
 // entry, in that order, and the entry is valid JSON in the live-context
 // schema (command, description, args).
 func TestReadmeWiringGuide(t *testing.T) {
@@ -63,7 +63,7 @@ func TestReadmeWiringGuide(t *testing.T) {
 
 	mentions := map[int][]string{
 		0: {"memory_<tag>_<os>_<arch>.tar.gz", "checksums.txt", "go build"},
-		3: {"agent/README.md"},
+		2: {"agent/README.md"},
 	}
 	for step, words := range mentions {
 		for _, w := range words {

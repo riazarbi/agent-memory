@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/xml"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -229,38 +228,4 @@ func TestWriteErrorsNameArguments(t *testing.T) {
 		}
 		sameSnapshot(t, before, snapshot(t, state))
 	}
-}
-
-// Acceptance criterion 7 for write: without notes/, write prints Part
-// III.3's message, exits 1 and creates nothing.
-func TestWriteWithoutNotes(t *testing.T) {
-	const want = "memory has no notes/ folder; run memory init"
-	args := []string{"write", "kettle-descaling", "--parent", "topics", "--description", "D", "--add", "x"}
-	t.Run("memory/ without notes/", func(t *testing.T) {
-		dir := t.TempDir()
-		state := filepath.Join(dir, ".agent")
-		writeFile(t, filepath.Join(state, "memory", "protocol", "usage.md"), "guidance\n")
-		ageTree(t, state)
-		before := snapshot(t, state)
-		if line := mustFail(t, runBin(t, dir, nil, args...)); line != want {
-			t.Errorf("stderr %q, want %q", line, want)
-		}
-		sameSnapshot(t, before, snapshot(t, state))
-		if exists(filepath.Join(state, "memory", "notes")) {
-			t.Error("write created notes/")
-		}
-	})
-	t.Run("no store at all", func(t *testing.T) {
-		dir := t.TempDir()
-		if line := mustFail(t, runBin(t, dir, nil, args...)); line != want {
-			t.Errorf("stderr %q, want %q", line, want)
-		}
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(entries) != 0 {
-			t.Errorf("write created %v", entries)
-		}
-	})
 }

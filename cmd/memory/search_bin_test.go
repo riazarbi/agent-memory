@@ -317,18 +317,3 @@ func TestSearchErrors(t *testing.T) {
 	}
 	sameSnapshot(t, before, snapshot(t, state))
 }
-
-// Acceptance criterion 7 for search: without notes/, Part III.3's message
-// and exit 1, creating nothing.
-func TestSearchWithoutNotes(t *testing.T) {
-	const want = "memory has no notes/ folder; run memory init"
-	dir := t.TempDir()
-	state := filepath.Join(dir, ".agent")
-	writeFile(t, filepath.Join(state, "memory", "protocol", "usage.md"), "guidance\n")
-	ageTree(t, state)
-	before := snapshot(t, state)
-	if line := mustFail(t, runBin(t, dir, nil, "search", "kettle")); line != want {
-		t.Errorf("stderr %q, want %q", line, want)
-	}
-	sameSnapshot(t, before, snapshot(t, state))
-}

@@ -2,16 +2,29 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// seeded runs init in a fresh directory and returns it with its notes/.
+// The D29 seeding descriptions, as the spec states them.
+var seedDescriptions = map[string]string{
+	"user":     "Who the operator is and how they want work done",
+	"projects": "Ongoing efforts, goals, incidents and commitments",
+	"people":   "Who is who, and how to deal with them",
+	"topics":   "Everything else worth knowing",
+}
+
+// seeded makes a fresh directory with an empty .agent/, has the first call
+// seed the store there (Part III.1), and returns it with its notes/.
 func seeded(t *testing.T) (dir, notes string) {
 	t.Helper()
 	dir = t.TempDir()
-	mustSucceed(t, runBin(t, dir, nil, "init"))
+	if err := os.Mkdir(filepath.Join(dir, ".agent"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustSucceed(t, runBin(t, dir, nil, "index"))
 	return dir, filepath.Join(dir, ".agent", "memory", "notes")
 }
 

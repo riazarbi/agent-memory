@@ -158,24 +158,6 @@ func TestIndexEmpty(t *testing.T) {
 	}
 }
 
-// Part III.3: a store without notes/ gets the corrective error, exit 1, and
-// nothing is created.
-func TestIndexWithoutNotes(t *testing.T) {
-	const want = "memory has no notes/ folder; run memory init"
-	dir := t.TempDir()
-	state := filepath.Join(dir, ".agent")
-	writeFile(t, filepath.Join(state, "memory", "protocol", "usage.md"), "guidance\n")
-	ageTree(t, state)
-	before := snapshot(t, state)
-	if line := mustFail(t, runBin(t, dir, nil, "index")); line != want {
-		t.Errorf("stderr %q, want %q", line, want)
-	}
-	sameSnapshot(t, before, snapshot(t, state))
-	if line := mustFail(t, runBin(t, dir, nil, "index", "topics")); !strings.Contains(line, "takes no arguments") {
-		t.Errorf("index with an argument: stderr %q", line)
-	}
-}
-
 // ── The budget ──────────────────────────────────────────────────────────
 
 // fxNode is a fixture node as the budget tests' model renders it.
