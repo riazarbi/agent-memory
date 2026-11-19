@@ -24,6 +24,10 @@ import (
 var agentFiles = []string{
 	"README.md",
 	"livecontext/memory_index.json",
+	"memory/notes/people/people.md",
+	"memory/notes/projects/projects.md",
+	"memory/notes/topics/topics.md",
+	"memory/notes/user/user.md",
 	"prompt/memory_usage.md",
 	"tools/memory_index.json",
 	"tools/memory_read.json",

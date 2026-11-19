@@ -35,17 +35,22 @@ func isEmptyDir(t *testing.T, what, dir string) {
 	}
 }
 
-// isStore fails unless parent/memory is a seeded store.
+// firstWrite is a first call that creates a store: a first-level node
+// under the root (Part III.6).
+var firstWrite = []string{"write", "kettle", "--parent", "/", "--description", "d"}
+
+// isStore fails unless parent/memory is the store firstWrite made.
 func isStore(t *testing.T, parent string) {
 	t.Helper()
-	for _, p := range []string{"memory/notes/topics/topics.md", "memory/notes/user/user.md"} {
+	for _, p := range []string{"memory/notes/kettle/kettle.md"} {
 		if !exists(filepath.Join(parent, filepath.FromSlash(p))) {
 			t.Errorf("%s does not exist", filepath.Join(parent, p))
 		}
 	}
 }
 
-// readsRoot fails unless r is a successful root read of a seeded store.
+// readsRoot fails unless r is a successful root read of the store
+// firstWrite made.
 func readsRoot(t *testing.T, r result) {
 	t.Helper()
 	mustSucceed(t, r)
@@ -55,7 +60,7 @@ func readsRoot(t *testing.T, r result) {
 	for _, n := range root.Nodes {
 		stems = append(stems, n.Stem)
 	}
-	check(t, "root stems", stems, []string{"people", "projects", "topics", "user"})
+	check(t, "root stems", stems, []string{"kettle"})
 }
 
 // Acceptance criterion 1: --parent-dir, in both spellings, beats
@@ -70,7 +75,7 @@ func TestParentDirFlagWins(t *testing.T) {
 		flag := slices.Clone(spelling)
 		flag[len(flag)-1] = strings.Replace(flag[len(flag)-1], "P", p, 1)
 
-		mustSucceed(t, runBin(t, w, env, append(flag, "index")...))
+		mustSucceed(t, runBin(t, w, env, append(flag, firstWrite...)...))
 		isStore(t, p)
 		isEmptyDir(t, spelling[0]+": Q", dirs[0])
 		isEmptyDir(t, spelling[0]+": H", dirs[1])
@@ -83,7 +88,7 @@ func TestParentDirFlagWins(t *testing.T) {
 	w := t.TempDir()
 	dirs := mkdirs(t, filepath.Join(w, "q"), filepath.Join(w, "h"), filepath.Join(w, "rel"))
 	env := map[string]string{"MEMORY_PARENT_DIR": dirs[0], "HOME": dirs[1]}
-	mustSucceed(t, runBin(t, w, env, "--parent-dir", "rel", "index"))
+	mustSucceed(t, runBin(t, w, env, append([]string{"--parent-dir", "rel"}, firstWrite...)...))
 	isStore(t, filepath.Join(w, "rel"))
 	isEmptyDir(t, "relative: Q", dirs[0])
 	isEmptyDir(t, "relative: H", dirs[1])
@@ -96,7 +101,7 @@ func TestParentFromEnvironment(t *testing.T) {
 	w := t.TempDir()
 	dirs := mkdirs(t, filepath.Join(w, "q"), filepath.Join(w, "h"))
 	env := map[string]string{"MEMORY_PARENT_DIR": dirs[0], "HOME": dirs[1]}
-	mustSucceed(t, runBin(t, w, env, "index"))
+	mustSucceed(t, runBin(t, w, env, firstWrite...))
 	isStore(t, dirs[0])
 	if exists(filepath.Join(dirs[0], "notes")) {
 		t.Error("MEMORY_PARENT_DIR was taken as the store itself")
@@ -107,7 +112,7 @@ func TestParentFromEnvironment(t *testing.T) {
 	w = t.TempDir()
 	h := mkdirs(t, filepath.Join(w, "h"))[0]
 	env = map[string]string{"MEMORY_PARENT_DIR": envUnset, "HOME": h}
-	mustSucceed(t, runBin(t, w, env, "index"))
+	mustSucceed(t, runBin(t, w, env, firstWrite...))
 	isStore(t, h)
 	if exists(filepath.Join(h, "notes")) {
 		t.Error("HOME was taken as the store itself")
@@ -163,8 +168,8 @@ func TestMalformedParentDir(t *testing.T) {
 	w := t.TempDir()
 	p, q := filepath.Join(w, "p"), filepath.Join(w, "q")
 	mkdirs(t, p, q)
-	mustSucceed(t, runBin(t, w, nil, "--parent-dir", p, "index"))
-	mustSucceed(t, runBin(t, w, nil, "--parent-dir", q, "index"))
+	mustSucceed(t, runBin(t, w, nil, append([]string{"--parent-dir", p}, firstWrite...)...))
+	mustSucceed(t, runBin(t, w, nil, append([]string{"--parent-dir", q}, firstWrite...)...))
 	before := snapshot(t, w)
 	line := mustFail(t, runBin(t, w, nil, "--parent-dir", p, "--parent-dir", q, "read"))
 	sameSnapshot(t, before, snapshot(t, w))
@@ -221,7 +226,7 @@ func TestNoAgentAwareness(t *testing.T) {
 		"AGENT_STATE_DIR":   filepath.Join(w, "s"),
 		"MEMORY_DIR":        filepath.Join(w, "m"),
 	}
-	mustSucceed(t, runBin(t, w, env, "index"))
+	mustSucceed(t, runBin(t, w, env, firstWrite...))
 	isStore(t, h)
 	entries, err := os.ReadDir(w)
 	if err != nil {

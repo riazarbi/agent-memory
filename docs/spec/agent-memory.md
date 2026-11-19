@@ -330,8 +330,8 @@ Principles:
 **Vocabulary** (D9): a **node** is a container — a folder holding its
 content file and its children; a **block** is an addressable unit of
 content — a paragraph with a harness-assigned ID; a **stem** is a node's
-address; the **root** is `notes/`; **first-level nodes** are the seeded top
-of the tree; the **index** is the projected top of the tree; a
+address; the **root** is `notes/`, the one fixed node; **first-level nodes**
+are the root's children, the top of the tree (no typology is built in, III.6); the **index** is the projected top of the tree; a
 **protocol** is a swappable bundle of files that decides how knowledge is
 captured and maintained (§4.6). The default protocol reads a node as one
 concept and a block as one claim — a convention, not a structural rule.
@@ -400,7 +400,7 @@ Two rules fall out: **the memory tools are a file server's verbs**, and
 │                                   audit.md will sit beside it
 └── notes/                          the root: no content file; its
     │                               rendering is the index (§4.4)
-    ├── user/                       first-level node: seeded by the protocol
+    ├── user/                       first-level node (an example tree, III.6)
     │   └── user.md
     ├── projects/
     │   └── projects.md
@@ -846,8 +846,9 @@ through the encoder (D27). A failed write leaves the store exactly as it was.
 - **Create vs update by stem existence.** The stem names a loaded node →
   update; otherwise → create.
   - **Create** needs a valid stem (D25 stem syntax), a `description`, and a
-    `parent` naming a loaded node — never the root (creating a first-level
-    node is restructuring, D19). A stem used by *any* folder in the tree,
+    `parent` naming a loaded node, or the root, written `/`, to create a
+    first-level node (CLI7, III.6; creating at the root was restructuring
+    before). A stem used by *any* folder in the tree,
     including one the reader skipped, cannot be created — that would collide
     with it. The node's folder is made inside the parent's folder (mode
     0755) and its folder note written (mode 0644) — set explicitly, whatever
@@ -902,37 +903,33 @@ through the encoder (D27). A failed write leaves the store exactly as it was.
   their checks and the first report success for bytes the second then
   replaced — the reason the lock was adopted.
 
-### Seeding and the ontology (D19)
+### Seeding and the ontology (D19, revised by CLI7 2026-11-19)
 
-- `memory/` follows the directory-level seed contract `skills/`, `tools/`
-  and `livecontext/` already use: when `memory/` is missing, seed
-  `protocol/usage.md` and the default first-level nodes; once it exists, never touch
-  it. Existing installs get it once (none has `memory/` yet); a deleted
-  `usage.md` stays deleted; a shipped `memory/` is never overwritten.
-- **The seeded tree is the starting ontology, and it belongs to the
-  protocol bundle** (§4.6), not to Go: an operator can ship any first
-  level.
-- **Who may change the top of the tree is a permission, not an
-  invariant.** Writing content and changing topology are different
-  operations (§4.5): `memory_write` is additive — it adds and updates
-  blocks and creates child nodes under existing nodes; creating at the
-  root, moving, renaming, merging, splitting or deleting needs the
-  restructuring operations, and a run has them only if its protocol grants
-  them. The default protocol grants the
-  live agent none, and its dream works inside first-level nodes without
-  restructuring the first level itself.
-- **Default seed (decided 2026-11-13): `user` / `projects` / `people` /
-  `topics`**, each seeded with a description. It is a hybrid of the kinds
-  considered: CC's set organises by *purpose* (user / feedback / project /
-  reference — how to use a node); the Claude app's by *subject* (areas /
-  people / projects / topics + `profile.md`, recognisably Tiago Forte's
-  PARA). The chosen set keeps a node for the operator (`user`, CC's and the
-  app's `profile.md` alike) and otherwise organises by subject. Readings:
-  `user` = who the operator is and how they want work done (preferences,
-  corrections, confirmations); `projects` = ongoing efforts, goals,
-  incidents and commitments; `people` = who is who and how to deal with
-  them; `topics` = everything else worth knowing. It is protocol content —
-  swappable, and to be changed only against evidence from real memory.
+- **No typology is built in** (III.6). The binary seeds nothing and names
+  no node. A missing store is an empty one; the root, `notes/`, is the one
+  fixed node.
+- **The starting tree is protocol content, shipped as files**
+  (`agent/memory/notes/`, III.4), which the operator copies, rearranges or
+  leaves out. The structure the model works with is whatever the index
+  shows.
+- **Who may change the top of the tree.** `write` adds and updates blocks
+  and creates nodes under any existing node or under the root, so any run
+  granted `write` can start a first-level node. Moving, renaming, merging,
+  splitting and deleting need restructuring operations, which no run has
+  yet: the model can add to the top of the tree but never remove from it.
+  The operator rearranges by hand (files, Obsidian).
+- **The default starting tree (decided 2026-11-13): `user` / `projects` /
+  `people` / `topics`**, each with a description. It is a hybrid of the
+  kinds considered: CC's set organises by *purpose* (user / feedback /
+  project / reference — how to use a node); the Claude app's by *subject*
+  (areas / people / projects / topics + `profile.md`, recognisably Tiago
+  Forte's PARA). The chosen set keeps a node for the operator (`user`, CC's
+  and the app's `profile.md` alike) and otherwise organises by subject.
+  Readings: `user` = who the operator is and how they want work done;
+  `projects` = ongoing efforts, goals, incidents and commitments; `people` =
+  who is who and how to deal with them; `topics` = everything else worth
+  knowing. Since CLI7 it is only the shipped example, and no shipped text
+  the model reads names it.
 
 ### Scope and write path
 
@@ -963,7 +960,7 @@ grows and how tags are kept tidy are methods (§4.6).
 
 **The tree.** Every node can hold content *and* children, at any depth.
 The structure does not prefer flat or deep; a protocol decides. It starts
-as the root plus the seeded first level.
+as the root alone, or as whatever tree the operator installs (III.6).
 
 **Tags organise; they don't impose an ontology.** Free, multiple,
 agent-defined, syntax-enforced, nestable with `/`, on nodes (frontmatter)
@@ -1258,9 +1255,9 @@ guidance and its lean hygiene rewrite, adapted to this design:
 # Memory
 
 You have a durable memory: notes that outlive this conversation, kept as a
-tree under four areas — user, projects, people, topics. Its index, when you are
-shown one, lists the areas and the tags in use. What you can do with it is
-exactly what your memory tools allow.
+tree of nodes. Its index, when you are shown one, lists the top-level nodes,
+their children and the tags in use; that is its structure. What you can do
+with it is exactly what your memory tools allow.
 
 ## What to save
 Save a claim only if it would still matter if this conversation were cleared
@@ -1282,8 +1279,9 @@ records of finished work; secrets.
 - For a rule, say why it holds and when it applies.
 - Mark your own interpretation as yours, not as fact.
 - Search before adding: update the existing note rather than starting a second.
-- File it under the area it belongs to, or a node you can name — don't hunt
-  for a deep location.
+- File it under the node it belongs to, as the index shows the tree — don't
+  hunt for a deep location. Start a new top-level node only when nothing in
+  the tree fits.
 
 ## Before you answer
 For questions about the operator's preferences, people, or past work, check
@@ -1294,7 +1292,7 @@ anything it says about files or the outside world before acting on it.
 Deliberately omitted from Claude Code's version: the mandatory "audit every
 reply for saves" regime (fragile #1 — revisit against our own experience
 before hardening), index-pointer bookkeeping (the index is rendered), the
-type taxonomy (the tree's first level does that job), team scope, and
+type taxonomy (the tree the operator installs, as the index shows it, does that job), team scope, and
 linking/citation mechanics (tool descriptions). The survivability test
 replaces CC's "useful in a future conversation", near-vacuous here because
 the future conversation is this conversation (§4.8); "nobody may be watching"
@@ -1315,9 +1313,9 @@ carry all call mechanics, so `usage.md` never repeats them.
 `description`, `tags` (list), `properties` (object), `blocks` (list of
 `{id?, text}`). Default description:
 
-> Save to your durable memory. Memory is a tree of nodes under the areas
-> user, projects, people and topics; each node is one subject and holds
-> blocks, one claim each. To create a node, give a new lowercase-hyphenated
+> Save to your durable memory. Memory is a tree of nodes; each node is one
+> subject and holds blocks, one claim each. *(Since CLI7 it names no
+> areas; the shipped CLI text is pinned in III.6.)* To create a node, give a new lowercase-hyphenated
 > `stem`, an existing node as `parent`, and a one-line `description`. The
 > `stem` is the node's own name, not a path: its place in the tree comes
 > from `parent`. To update a node, give its `stem`: blocks without an `id` are added, a block
@@ -1334,7 +1332,7 @@ description:
 > Read your durable memory. Give a node's `stem` to get its description,
 > tags and blocks (each with its ID), its children (`depth` levels deep,
 > default 1), the nodes it links to, and the nodes that link to it. Add
-> `block` to read a single block. Give no `stem` to list the top-level areas
+> `block` to read a single block. Give no `stem` to list the top-level nodes
 > and the tags in use.
 
 **Results** are XML built with `encoding/xml` (D20), every stem and block ID
@@ -1385,7 +1383,7 @@ Rulings ratified at U7 banking (2026-11-16):
   corrective error in D30, not the raw lock-file error.
 - **T8 stays open:** `memory_write` works under `-immutable`.
 
-**Seeding** (with the tools, before injection exists): when `memory/` is
+**Seeding** *(superseded: since CLI7 nothing is seeded, III.6)* (with the tools, before injection exists): when `memory/` is
 missing, `agent.New` creates `memory/protocol/usage.md` (the text above) and
 the first level as nodes with no blocks — `user` ("Who the operator is and
 how they want work done"), `projects` ("Ongoing efforts, goals, incidents
@@ -1622,8 +1620,8 @@ What this design has worked out so far is the **default bundle**, not the
 architecture:
 
 - **Atomicity:** one concept per node, one claim per block.
-- **Capture shallow:** the live agent adds blocks to the first-level node
-  they belong to, or under a node it can name — never hunting for a deep
+- **Capture shallow:** the live agent adds blocks to the node they belong
+  to, as the index shows the tree, or under a node it can name — never hunting for a deep
   location; placement is the dream's job, because classification at write
   time is what small models do inconsistently. The live agent is granted
   read and write, plus search where the operator has opted in (D31) — never
@@ -1637,8 +1635,9 @@ architecture:
   let pages emerge from references) points the same way.
 - **Tag hygiene:** merging synonym tags is a main job of the dream; a
   cluster of blocks sharing a tag is a split candidate named by that tag.
-- **The first level is fixed:** the dream works inside first-level nodes
-  but is not granted restructuring of the first level itself.
+- **The first level is the operator's** *(revised by CLI7)*: any run with
+  `write` may add a first-level node, but no run moves, renames or deletes
+  one; the dream works inside the tree it finds.
 - **No claim status.** The default protocol is a memory store with
   Claude Code-style correction: gather by suspicion (drift first, then
   narrow searches of evidence), fix drift and contradictions at the
@@ -1794,8 +1793,8 @@ says how the store is reached.
 of the same day, never released). `memory` knows nothing about agents. It operates on the store
 `<parent>/memory`, where `<parent>` is the first of:
 
-1. **`--parent-dir DIR`**, given *before the verb*: `memory --parent-dir DIR read topics`, or
-   `memory --parent-dir=DIR read topics`;
+1. **`--parent-dir DIR`**, given *before the verb*: `memory --parent-dir DIR read kettle`, or
+   `memory --parent-dir=DIR read kettle`;
 2. **`MEMORY_PARENT_DIR`** from the environment;
 3. **`HOME`** from the environment.
 
@@ -1822,9 +1821,9 @@ what the operator's shell happens to export. The agent-specific choice lives in 
 `~/memory`) or `export MEMORY_PARENT_DIR=…`. A clone for A/B work (D24) is reached with a different
 `--parent-dir`.
 
-**The store is created on first use** (CLI6, operator ruling 2026-11-19; it replaces the `init`
-verb). There is no install step: every verb seeds the store it resolved when that store has no
-`notes/`, then does its job.
+**A missing store is an empty store** (CLI7, operator ruling 2026-11-19; it replaces CLI6's
+seeding on first use, which replaced the `init` verb). There is no install step, and `memory` never
+creates a node on its own (III.6).
 
 - **The parent must already exist.** After resolution, `<parent>` must exist and be a directory
   (symlinks followed). Otherwise the call fails, creating nothing, with
@@ -1834,31 +1833,27 @@ verb). There is no install step: every verb seeds the store it resolved when tha
   `memory` creates `memory/` inside the parent, never the parent itself, so a mistyped
   `--parent-dir` or `MEMORY_PARENT_DIR` (or an agent that passed `${AGENT_STATE_DIR}` literally)
   fails loudly instead of starting a new store somewhere unexpected.
-- **The trigger is `notes/`.** When `<parent>/memory/notes` does not exist, the verb creates it with
-  the seed first level (D19: `user`, `projects`, `people`, `topics`, each a description and no
-  blocks, exactly as a `write` would encode it), creating `<parent>/memory` first if it is missing.
-  Nothing else is created, in `memory/` or beside it, and entries already in `memory/` are left as
-  they are. When `notes/` exists — even empty, even missing a first-level node — nothing is seeded,
-  so a deleted first-level node stays deleted. Deleting `notes/` itself resets the store: the next
-  call seeds it again.
-- **Seeding is atomic.** `notes/` is built in a hidden temporary directory inside `memory/` and
-  renamed into place, so a failed seed leaves no partial `notes/`, and of two calls seeding at once
-  one wins and both succeed on the winner's `notes/`.
-- **Seeding is silent.** A call that seeded prints exactly what it would on a store seeded
-  beforehand, with nothing on stderr. `read` on a fresh store shows the four first-level nodes.
+- **Reading a missing store.** When `<parent>/memory` or `<parent>/memory/notes` does not exist,
+  `read`, `search` and `index` behave as on an empty `notes/` and create nothing: `read` with no
+  stem prints the root with no nodes and no tags; `read STEM` is the unknown-stem error;
+  `search` prints `matched="0"`; `index` prints nothing (exit 0). `read`, `search` and `index`
+  never write anything, store or no store (no lock file either).
+- **Writing to a missing store.** `write`, once its arguments have passed (III.2), creates
+  `<parent>/memory` and `<parent>/memory/notes` as needed (mode 0755, forced) before taking its
+  lock, and nothing else. On an empty store the only write that can succeed is a create under the
+  root (`--parent /`, III.6); a refused write still leaves the empty `memory/notes/` and its lock
+  file.
 - **Errors come first.** An argument error (III.2), a resolution error (above) or a missing or
   non-directory parent creates nothing. `memory/` or `memory/notes` existing as something other than
-  a directory is an error naming that path (`<path> is not a directory`), and creates nothing.
-- Every verb seeds, the read-only ones (`read`, `search`, `index`) included: the first call of any
-  kind creates the store. Once it exists, `read`, `search` and `index` write nothing (no lock file
-  either).
+  a directory (including a dangling symlink) is an error naming that path
+  (`<path> is not a directory`), and creates nothing.
 
 ## III.2 Verbs
 
 | Verb | Arguments | Does |
 |---|---|---|
-| `read` | `[STEM] [--block ID] [--depth N]` | D29's `memory_read`: the same result XML, and with no `STEM` the root. `--depth` defaults to 1. |
-| `write` | `STEM [--parent P] [--description D] [--tag T]… [--property K=V]… [--add TEXT]… [--replace ID=TEXT]…` | D29's `memory_write`. `--add` and `--replace` are the blocks, in argv order. Any `--tag` replaces the node's tags with the given list. `--property` values are strings. |
+| `read` | `[STEM] [--block ID] [--depth N]` | D29's `memory_read`: the same result XML, and with no `STEM`, or `STEM` `/`, the root (III.6). `--depth` defaults to 1. |
+| `write` | `STEM [--parent P] [--description D] [--tag T]… [--property K=V]… [--add TEXT]… [--replace ID=TEXT]…` | D29's `memory_write`. `--parent /` is the root: a create under it makes a first-level node (III.6). `--add` and `--replace` are the blocks, in argv order. Any `--tag` replaces the node's tags with the given list. `--property` values are strings. |
 | `search` | `QUERY` | D31's search, with the same syntax and the same result XML. |
 | `index` | none | Prints `<memory_index>`, laid out and budgeted as in D30, or nothing when no node loads. |
 
@@ -1878,7 +1873,7 @@ verb). There is no install step: every verb seeds the store it resolved when tha
 - **Success:** XML on stdout (D20 renderings), exit 0.
 - **Error:** one line on stderr, exit 1. Unknown stems list up to five near matches. A missing
   parent says `parent dir <parent> does not exist (from <source>)` (III.1); a missing `notes/` is
-  not an error, it is seeded.
+  not an error, it is an empty store.
 - **Retry:** "busy" and "changed on disk" (D28) go to stderr with exit 75 (`EX_TEMPFAIL`).
 - **No logging, no events.** The agent's own `tool.invoked` and `tool.error` record each call. The
   `memory.*` events of Part II are not emitted.
@@ -1895,6 +1890,7 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 | `agent/tools/memory_read.json`, `memory_write.json`, `memory_search.json`, `memory_index.json` | `<state dir>/tools/` | The shell tools. |
 | `agent/prompt/memory_usage.md` | `<state dir>/prompt/` | The guidance: when and what to save (the §4.5 text, verbatim). A `prompt/` fragment, loaded every turn. |
 | `agent/livecontext/memory_index.json` | `<state dir>/livecontext/` | The index at the start of each input. |
+| `agent/memory/notes/<stem>/<stem>.md` for `user`, `projects`, `people`, `topics` | `<state dir>/memory/notes/` | An optional starting tree (III.6), copied only into a store that does not exist yet. |
 | `agent/README.md` | — | What each file is, where it goes, and the rules below. |
 
 - **Tool files** are argv shell tools (`"command": "memory"`), with `prepend_args`
@@ -1940,24 +1936,77 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 - (CLI4) `memory --parent-dir --parent-dir read` takes the second `--parent-dir` as the directory
   (as every flag here takes its next argument). Since CLI6 that fails unless a directory named
   `--parent-dir` exists. No tool file can produce it.
-- (CLI6) The read-only verbs create the store on first use, so `memory read` in a fresh home
-  directory leaves a `~/memory`. Accepted: it happens once, and it is what makes an install step
-  unnecessary.
-- (CLI6) A crash mid-seed can leave a hidden `.notes-seed-*` directory inside `memory/`. The reader
-  walks only `notes/`, so it is inert; the operator may delete it.
-- (CLI6 acceptance) Only parse-level argument errors come before seeding. Errors found once the
-  store is open — `search` with an empty query or `'tag:'`, `write` with an invalid stem — exit 1
-  after the store has been seeded. Harmless: the seed is what any later call would create.
-- (CLI6 acceptance) A dangling symlink as the parent says `does not exist`; as `memory/` or `notes`
-  it says `is not a directory` and is never seeded through. Seeding forces `notes/` to 0755; the seeded
-  node folders follow the umask, as before.
-- (CLI4) An operator who deletes the `--parent-dir` pair from a tool file points the agent at
-  `$HOME/memory`, which may be a human's personal store.
+- (CLI7) The model can add first-level nodes but no verb removes, moves or renames one, so a top
+  level the model has sprawled is pruned by the operator, by hand.
+- (CLI7) A `write` refused on a missing store (an unknown parent, say) still leaves an empty
+  `memory/notes/` and its lock file. It reads as the same empty store.
+- (CLI6 acceptance) A dangling symlink as the parent says `does not exist`.
 
 ## III.5 Not in the CLI
 
 Restructuring verbs, dreaming and the audit (§4.6, §6), a capability line, an install command, a
 Docker image, and any agent-side change.
+
+
+## III.6 No built-in typology (CLI7, operator ruling 2026-11-19)
+
+The structure of a store is whatever its tree is. `memory` imposes none, and nothing the model reads
+presumes one: the model learns the structure from the index (or a root read), and the operator
+changes it by rearranging folders.
+
+- **The binary names no node.** It seeds nothing and contains no starting tree; a missing store is
+  an empty one (III.1).
+- **The root is the one fixed node.** It is `notes/` itself: it has no folder note and no content,
+  and it is never deleted by any verb. The CLI writes it `/`:
+  - `write STEM --parent / …` creates `STEM` as a first-level node (folder `notes/STEM/`). An update
+    of a first-level node may give `--parent /`, as it may give any node's real parent.
+  - `read /` is the root read, the same as `read` with no stem. `read / --block ID` is an error
+    naming `STEM` (the root has no blocks).
+  - `/` is never a node's own stem: `write /` is an error naming `STEM` (the root has no content
+    and cannot be written).
+  - In the library's write request the root parent is the string `/` too.
+- **Who changes the top of the tree.** Any run granted `write` can add a first-level node. No verb
+  moves, renames, merges, splits or deletes a node, so the model can add to the top of the tree but
+  never remove from it. The operator rearranges by hand: a node is a folder holding
+  `<folder>/<folder>.md` with a one-line `description` in its frontmatter (§4.2), so renaming,
+  moving or deleting folders (in a file manager or Obsidian) reshapes the tree.
+- **The starting tree is a shipped example.** `agent/memory/notes/` holds four first-level nodes,
+  each `<stem>/<stem>.md` byte-equal to what `memory write <stem> --parent / --description <D>`
+  creates: `user` ("Who the operator is and how they want work done"), `projects` ("Ongoing
+  efforts, goals, incidents and commitments"), `people` ("Who is who, and how to deal with them"),
+  `topics` ("Everything else worth knowing"). The operator copies it, edits it, makes their own, or
+  leaves it out. It is copied only into a store that does not exist yet:
+  `[ -e <state dir>/memory ] || cp -R memory <state dir>/` from the `agent/` folder.
+- **Shipped text never presumes a typology.** The tool descriptions, the live-context entry's
+  description and the guidance say "top-level nodes", never "areas", name no node as a place to file
+  anything, and send the model to the index for the structure. The texts that change:
+  - `memory_write.json`:
+    > Save to your durable memory. Memory is a tree of nodes; the memory index, or a read with no
+    > stem, shows its top-level nodes and their children. Each node is one subject and holds blocks,
+    > one claim each. The first argument is the node's stem; the flags follow, each flag and its
+    > value as separate arguments. To create a node, give a new lowercase-hyphenated stem, an
+    > existing node as --parent, and a one-line --description. File it under the node it belongs
+    > to; give --parent / to start a new top-level node, only when nothing in the tree fits. The
+    > stem is the node's own name, not a path: its place in the tree comes from --parent. To update
+    > a node, give its stem: each --add TEXT adds a block, each --replace ID=TEXT replaces that
+    > block's text (blocks in the order given); --tag replaces the node's tags with the --tag values
+    > given (repeat it for several tags); --property KEY=VALUE is merged into its properties;
+    > --description replaces its description. Tags cannot be cleared and blocks cannot be deleted.
+    > Each block is one plain paragraph: no headings, lists, quotes, code or tables. Link to a node
+    > as [[stem]] or to a block as [[stem#^id]]. Block IDs are assigned for you and returned.
+    > Example: ["outbox-etiquette", "--parent", "<parent stem>", "--description", "How and when to
+    > cc people on outbox replies", "--tag", "outbox", "--add", "Cc Priya on urgent replies; she
+    > asked for this on 2026-11-02."]. If the command exits with code 75 ("busy" or "changed on
+    > disk"), run the same command again.
+  - `memory_read.json`: "Give no stem to list the top-level areas and the tags in use." becomes
+    "Give no stem, or /, to list the top-level nodes and the tags in use."
+  - `memory_index.json`: "the top-level areas and their children" becomes "the top-level nodes and
+    their children".
+  - `livecontext/memory_index.json`: "its top-level areas" becomes "its top-level nodes".
+  - The guidance: §4.5's text as revised in this ruling.
+- **Supersedes** in Part II: the seeding paragraphs (§4.2 *Seeding and the ontology*, §4.5
+  *Seeding*), the first-level rule in D28's create ("never the root"), and §4.6's "the first level is
+  fixed", each revised in place.
 
 ## 5. Decisions
 
@@ -1978,12 +2027,12 @@ Superseded decisions keep their number; the row says what changed and why.
 | D11 | Structure | **A tree of nodes**, each holding content and children at any depth — replacing the earlier flat/shallow layout with folders as decorative grouping. Stems unique store-wide; node links survive any move; block moves rewrite inbound links; missing links are reported by the harness; tags free, multiple, agent-defined, syntax-enforced; links are edges. How the tree grows is method (D23). |
 | D12 | Context | **`context/` is the conversation, and nothing else.** No transcript preservation — not a write-mirror, a read-time diff log, nor a peer sync job. Operators manipulate the live conversation freely with system tools, and no memory mechanism may gate, witness, or depend on that not happening. Anything reading `context/` as evidence must tolerate it having been rewritten. |
 | D13 | Capability switch | **Tool availability is the switch.** Any memory tool registered ⇒ the section is injected; none ⇒ nothing, plus `memory.disabled`. Each tool grants its operation: read-only (ship a mature store to a read-only workload), write, search; write-only is a legitimate capture-only mode. The harness states the mode in one capability line. Stricter than skills (removing `load_skill` merely downgrades to `read_file`), because for memory a save instruction without a write tool is a trap. |
-| D14 | Who does what | Harness: renders the index and provides the operations. Every run gets exactly the tools its protocol grants; `memory_write` is additive, restructuring is separate (D13). Default protocol: the live agent reads, writes and searches, capturing shallow; the dream restructures within first-level nodes (pending design). Audit: needs elaboration. Prune, reset, schedule: operator operations, out of scope. |
+| D14 | Who does what | Harness: renders the index and provides the operations. Every run gets exactly the tools its protocol grants; `memory_write` is additive, restructuring is separate (D13). Default protocol: the live agent reads, writes and searches, capturing shallow; the dream restructures within first-level nodes (pending design). Audit: needs elaboration. Prune, reset, schedule: operator operations, out of scope. *(CLI7: creating a first-level node is an ordinary write; III.6.)* |
 | D15 | Guidance location | *(Superseded for the CLI by Part III.4: the guidance is the `prompt/` fragment `memory_usage.md`, installed by the operator.)* `memory/protocol/usage.md`, operator-written, injected only under D13 — moved from `prompt/memory.md`, because a `prompt/` fragment loads unconditionally and would keep instructing saves after the tools were removed. Tool descriptions carry call mechanics; `usage.md` carries when and what. |
 | D16 | Write path | Memory lives in `memory/notes/` and is written only by the memory tools, scoped to it so their permissions never reach `usage.md`. The general file tools are closed on the whole state dir ([`state-dir-write-deny.md`](state-dir-write-deny.md)); shell tools out of scope. |
 | D17 | Obsidian validity | **Enforced**: `notes/` is always a valid vault. Kebab-case stems, typed frontmatter (text, list, number, checkbox, date, datetime; no nested objects; meaning given only to `description` and `tags`), Obsidian tag syntax, `[[stem]]` / `[[stem\|alias]]` / `[[stem#^id]]` links; `name` dropped; embeds and query DSLs rejected. Checked at write, warned at render. |
 | D18 | Blocks | Nodes contain addressable blocks: one paragraph ending in an Obsidian `^id` — `m-` + 6 base-36 chars, harness-assigned, stable, unique store-wide. Inline `#tags` per block. Block text is opaque to the harness. Atomicity (how much a block holds) is protocol convention; the default is one claim per block. |
-| D19 | Seeded ontology | The seed tree is the starting ontology and part of the protocol bundle: shippable, not hard-coded. Changing the first level is a restructuring operation, available only where a protocol grants it; the default protocol grants it to no run. No `type` field and no derived type in the harness. Default seed: `user` / `projects` / `people` / `topics`. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: the guidance ships as `agent/prompt/memory_usage.md`, and since CLI6 any verb seeds `notes/` on first use (III.1); there is no `init`.)* |
+| D19 | Seeded ontology → no built-in typology | *(Revised by CLI7, 2026-11-19, III.6.)* No typology is built in: the binary seeds nothing and names no node; the root `notes/` is the one fixed node, written `/`; any run with `write` may create a first-level node under it, and no verb moves or deletes one, so the top level is pruned by the operator by hand. The starting tree is protocol content shipped as files (`agent/memory/notes/`: `user` / `projects` / `people` / `topics`), optional, and no shipped text the model reads names it. No `type` field and no derived type in the harness. *(Before CLI7: the seed was built in, and changing the first level was restructuring.)* |
 | D20 | Wire formats | XML for everything the harness renders, built with Go's standard `encoding/xml` (no hand-assembled XML: note text containing `<`, `&` or quotes must always escape correctly; no new dependency); JSON arguments (the protocol's envelope) with simple fields and plain-text content. Search queries use an Obsidian search-syntax subset. |
 | D21 | Lineage | Plan 9 (§4.1): the memory tools are a file server's verbs; reading a node returns content and children; the index is a synthetic file; capability is what is bound into the namespace. |
 | D22 | Cache | The index stays in the system prompt; the cached prompt is discarded once per store mutation, accepted. Render once per input; absolute dates only. Moving the index to the end of the request (spliced into the user message) stays open. |
@@ -1993,9 +2042,9 @@ Superseded decisions keep their number; the row says what changed and why.
 | D26 | Frontmatter round-trip | Hybrid: a write changing no frontmatter field copies its bytes exactly; one that changes fields re-emits from the YAML node tree, keeping every other property's value, type, tag, order, scalar form and comments. The read model keeps raw frontmatter text and each property's YAML nodes. §4.2 *Round-trip of frontmatter*. |
 | D27 | Encoding nodes | A pure encoder: crypto-random `m-` IDs unique store-wide; a fixed layout for new nodes; byte-identical output for an unchanged node; untouched blocks keep their exact lines; frontmatter changes re-emitted per D26 (tags replace, properties merge); BOM and line ending kept; validation before output; everything emitted reads back clean. §4.2 *Encoding nodes*. |
 | D28 | Writing to disk | An exclusive OS lock (`flock` on `notes/.write.lock`, bounded 10 s wait, then "busy — retry") serializes writes across processes; one writer per `notes/` per process; each write from a fresh full load; create vs update by stem existence (create: valid unused stem, description, a loaded non-root parent; update: parent absent or matching); writes to skipped nodes refused; atomic temp-file-and-rename; refuse if the file changed on disk since it was read; read back through a full load and roll back on failure. §4.2 *Writing to disk*. |
-| D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: the guidance ships as `agent/prompt/memory_usage.md`, and since CLI6 any verb seeds `notes/` on first use (III.1); there is no `init`.)* |
-| D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. *(For the CLI, Part III supersedes the injection and the corrective error for a missing `notes/`: since CLI6 a missing `notes/` is seeded on first use, III.1.)* |
-| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `read`, `write`, `search` and `index`; the first call seeds the store (CLI6). The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1 and 75 (retry). There is no logging and no capability line. |
+| D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: the guidance ships as `agent/prompt/memory_usage.md`, and since CLI7 nothing is seeded: a missing store is empty, and the starting tree ships as `agent/memory/notes/` (III.6); there is no `init`.)* |
+| D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. *(For the CLI, Part III supersedes the injection and the corrective error for a missing `notes/`: since CLI7 a missing `notes/` is an empty store, III.1.)* |
+| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `read`, `write`, `search` and `index`; it seeds nothing, a missing store is empty, and no typology is built in (CLI7, III.6). The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1 and 75 (retry). There is no logging and no capability line. |
 | D31 | `memory_search` | Opt-in built-in (catalogued, never seeded, no generation bump); one `query` argument in an Obsidian syntax subset (words, phrases, `-`, `OR`, `tag:`, `path:`, `file:`, `[property:value]`, no parentheses); per-node matching, hit blocks, ranking by hits then recency; 20 nodes / 5 blocks; XML via `encoding/xml`; `memory.searched`. §4.5 *`memory_search`, exactly*. |
 
 ## 6. Out of scope, deferred, open

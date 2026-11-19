@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,16 +17,41 @@ var seedDescriptions = map[string]string{
 	"topics":   "Everything else worth knowing",
 }
 
-// seeded makes a fresh directory with an empty .agent/, has the first call
-// seed the store there (Part III.1), and returns it with its notes/.
+// seeded makes a fresh directory whose .agent/memory/ is a copy of the
+// shipped starting tree, agent/memory/ (Part III.6), and returns it with its
+// notes/.
 func seeded(t *testing.T) (dir, notes string) {
 	t.Helper()
 	dir = t.TempDir()
-	if err := os.Mkdir(filepath.Join(dir, ".agent"), 0o755); err != nil {
+	copyTree(t, filepath.Join(repoRoot(t), "agent", "memory"), filepath.Join(dir, ".agent", "memory"))
+	return dir, filepath.Join(dir, ".agent", "memory", "notes")
+}
+
+// copyTree copies the directories and regular files under src to dst, with
+// mode 0755 for directories and 0644 for files, as write makes them.
+func copyTree(t *testing.T, src, dst string) {
+	t.Helper()
+	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, p)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		data, err := os.ReadFile(p) //nolint:gosec // the repo's own files
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0o644) //nolint:gosec // a test temp dir
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	mustSucceed(t, runBin(t, dir, nil, "index"))
-	return dir, filepath.Join(dir, ".agent", "memory", "notes")
 }
 
 // Acceptance criterion 3: read with no stem is the root — the first-level
