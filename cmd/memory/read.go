@@ -140,8 +140,8 @@ func (ra *readArgs) setStem(pos []string) error {
 
 // readVerb is D29's memory_read: a node with its blocks, children to
 // --depth, links and backlinks; one block with --block; the root with no
-// STEM or with /. Argument errors come before the store is looked at, and
-// a missing store reads as an empty one (Part III.1).
+// STEM or with /. Argument errors come before the store is looked at;
+// then a missing store is created empty and read as such (Part III.1).
 func readVerb(loc location, args []string) ([]byte, error) {
 	ra, err := parseReadArgs(args)
 	if err != nil {

@@ -80,8 +80,8 @@ func parentFromEnv() (dir, source string, err error) {
 	return "", "", errNoStore
 }
 
-// storeDirMode is the mode write gives memory/ and notes/ when it creates
-// them, whatever the umask (Part III.1).
+// storeDirMode is the mode every verb gives memory/ and notes/ when it
+// creates them, whatever the umask (Part III.1).
 const storeDirMode fs.FileMode = 0o755
 
 // paths resolves the store (Part III.1): the parent and its source, which
@@ -107,30 +107,14 @@ func (l location) paths() (memoryDir, notes string, err error) {
 	return memoryDir, filepath.Join(memoryDir, "notes"), nil
 }
 
-// notesDir is the store's notes/ for the read verbs, which create nothing
-// (Part III.1): a missing memory/ or notes/ is returned as it is, and loads
-// as an empty store. memory/ or notes existing as anything but a directory
-// is an error naming that path.
+// notesDir is the store's notes/, for every verb: it creates memory/ and
+// memory/notes as needed, mode 0755 forced, and nothing else (Part III.1):
+// no node, and no lock file (write's writer makes its own). Each verb calls
+// it after its argument checks, so an argument error creates nothing, and
+// a resolution error or a missing parent comes first too. Once notes/
+// exists it touches nothing. Another process creating the same directory
+// first is not an error.
 func (l location) notesDir() (string, error) {
-	memoryDir, notes, err := l.paths()
-	if err != nil {
-		return "", err
-	}
-	for _, dir := range []string{memoryDir, notes} {
-		missing, err := missingDir(dir)
-		if err != nil || missing {
-			return notes, err
-		}
-	}
-	return notes, nil
-}
-
-// makeNotesDir is the store's notes/ for write, which creates memory/ and
-// memory/notes as needed, mode 0755 forced, and nothing else (Part III.1).
-// write calls it after its argument checks and before its lock, so an
-// argument error creates nothing. Another write creating the same
-// directory first is not an error.
-func (l location) makeNotesDir() (string, error) {
 	memoryDir, notes, err := l.paths()
 	if err != nil {
 		return "", err
@@ -152,7 +136,7 @@ func makeStoreDir(dir string) error {
 	}
 	if err := os.Mkdir(dir, storeDirMode); err != nil { //nolint:gosec // inside the store the caller named (III.1)
 		if errors.Is(err, fs.ErrExist) {
-			// Another write made it in between: judge what it made.
+			// Another call made it in between: judge what it made.
 			_, err := missingDir(dir)
 			return err
 		}

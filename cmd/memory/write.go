@@ -117,7 +117,7 @@ func writeVerb(loc location, args []string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	notes, err := loc.makeNotesDir()
+	notes, err := loc.notesDir()
 	if err != nil {
 		return nil, err
 	}

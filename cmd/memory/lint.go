@@ -42,10 +42,11 @@ func lintFlags(exitZero *bool) *flag.FlagSet {
 	return flags
 }
 
-// lintVerb loads the store, creating nothing, and reports every problem
-// the reader finds. It returns the report alone when the store has no
-// errors, or when --exit-zero is given, and the report with errLintFound
-// when it has errors. An argument error comes first, --exit-zero or not:
+// lintVerb loads the store, creating only a missing store's empty
+// memory/notes/ (Part III.7), and reports every problem the reader finds.
+// It returns the report alone when the store has no errors, or when
+// --exit-zero is given, and the report with errLintFound when it has
+// errors. An argument error comes first, --exit-zero or not:
 // a failure to run is never exit 0.
 func lintVerb(loc location, args []string) ([]byte, error) {
 	var exitZero bool

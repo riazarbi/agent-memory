@@ -2,10 +2,11 @@
 // used on its own or through shell tools (docs/spec/agent-memory.md Part
 // III). The store is <parent>/memory, the parent being --parent-dir given
 // before the verb, else MEMORY_PARENT_DIR, else HOME; the parent must exist.
-// A missing store is an empty one, and only write creates it; memory seeds
-// nothing and names no node (Part III.6). Results are XML on
-// stdout with exit 0; an error is one line on stderr with exit 1, or exit 75
-// when retrying can succeed (busy, changed on disk). lint alone exits 2,
+// A missing store is an empty one: every verb, once its arguments pass,
+// creates the empty memory/notes/; memory seeds nothing and names no node
+// (Part III.1, III.6). Results are XML on stdout with exit 0; an error is
+// one line on stderr with exit 1, or exit 75 when retrying can succeed
+// (busy, changed on disk). lint alone exits 2,
 // its report on stdout, when the store has errors, unless given
 // --exit-zero (Part III.7). It never logs.
 package main
@@ -50,7 +51,8 @@ verbs:
   search QUERY                          search, in Obsidian search syntax (quote
                                         a query of several words)
   index                                 the index: top-level nodes, their
-                                        children and the top tags
+                                        children and the top tags; on a
+                                        store with no nodes, says so
   lint [--exit-zero]                    check the whole store: report every
                                         problem; exit 0 with none or only
                                         warnings, 2 when there are errors;
@@ -62,8 +64,9 @@ The store is <parent>/memory. The parent is --parent-dir DIR (or
 environment; else HOME. A relative parent is taken against the working
 directory. An empty --parent-dir, or a variable set but empty, is an error.
 After the verb, --parent-dir is not an option. The parent must already
-exist. A missing store is an empty one: read, search and index create
-nothing, and write creates memory/notes/ when it is missing.
+exist. A missing store is an empty one: every verb, once its arguments
+pass, creates memory/ and memory/notes/ when they are missing, and nothing
+else.
 `
 
 // verb runs one verb's arguments against the store at loc and returns its

@@ -30,7 +30,7 @@ cp livecontext/memory_index.json <state dir>/livecontext/
 [ -e <state dir>/memory ] || cp -R memory <state dir>/
 ```
 
-That installs everything. The last line copies the starting tree only when `<state dir>/memory` does not exist, so it never touches an existing store; without it the store starts empty, and the agent's first `write` creates it (`memory` itself seeds nothing). Copy less to grant less; the sections below say what each choice means.
+That installs everything. The last line copies the starting tree only when `<state dir>/memory` does not exist, so it never touches an existing store; without it the store starts empty, and the agent's first `memory` call of any kind creates it, empty (`memory` itself seeds nothing). That first call is usually the live-context index at the start of the agent's first input; after it, `<state dir>/memory` exists and the last line copies nothing, so copy the starting tree before the agent first runs. Copy less to grant less; the sections below say what each choice means.
 
 ## The tool files
 

@@ -21,20 +21,26 @@ const (
 	// holds at most this many lines and bytes.
 	maxIndexLines = 200
 	maxIndexBytes = 25000
+	// indexEmpty is <empty>'s text, said when no node loads (Part III.2),
+	// so a live-context entry tells the model its memory exists and is
+	// empty rather than showing nothing.
+	indexEmpty = "No nodes yet."
 )
 
-// indexXML is <memory_index>: the trust line, the first-level nodes with
-// their children as read renders child entries, the notice when entries
-// were dropped, and the top tags.
+// indexXML is <memory_index>: the trust line, then either <empty> (no node
+// loaded) or the first-level nodes with their children as read renders
+// child entries, the notice when entries were dropped, and the top tags.
 type indexXML struct {
 	XMLName xml.Name    `xml:"memory_index"`
 	Trust   string      `xml:",chardata"`
+	Empty   string      `xml:"empty,omitempty"`
 	Nodes   []entryXML  `xml:"node"`
 	Omitted *omittedXML `xml:"omitted"`
 	Tags    string      `xml:"tags,omitempty"`
 }
 
-// indexVerb prints <memory_index>, or nothing when no node loads.
+// indexVerb prints <memory_index>; when no node loads, the trust line and
+// <empty> alone (no <tags>: tags come only from loaded nodes).
 func indexVerb(loc location, args []string) ([]byte, error) {
 	if err := noArgs("index", args); err != nil {
 		return nil, err
@@ -46,8 +52,9 @@ func indexVerb(loc location, args []string) ([]byte, error) {
 	st := memory.Load(notes)
 	first := st.FirstLevel()
 	if len(first) == 0 {
-		// Every node lies under a first-level node, so none loaded.
-		return nil, nil
+		// Every node lies under a first-level node, so none loaded. The
+		// budget has nothing to drop.
+		return render(indexXML{Trust: indexTrust, Empty: indexEmpty})
 	}
 	sort.Slice(first, func(i, j int) bool { return first[i].Stem < first[j].Stem })
 	ranked := rankedTags(tagCounts(st))

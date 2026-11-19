@@ -47,7 +47,8 @@ type omittedXML struct {
 // searchVerb is D31's search. The query is one argument, taken verbatim:
 // search has no flags, so a query starting with - (an exclusion) is not
 // one; a leading -- is dropped, as the end of flags. As in memory_search,
-// the arguments are checked, then notes/, then the query is parsed.
+// the arguments are checked, then notes/ (created empty when missing, Part
+// III.1), then the query is parsed.
 func searchVerb(loc location, args []string) ([]byte, error) {
 	if len(args) > 0 && args[0] == endOfFlags {
 		args = args[1:]

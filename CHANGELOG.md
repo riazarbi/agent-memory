@@ -3,6 +3,65 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-19 - An empty memory says so: every verb creates a missing store, and `index` on it prints `<empty>No nodes yet.</empty>`
+
+- `cmd/memory/store.go`: one path to the store for every verb (spec
+  III.1, CLI10). `notesDir` now does what `makeNotesDir` did for `write`
+  alone: after resolution and the parent check, it creates `memory/` and
+  `memory/notes/` when missing (mode 0755 forced on what it creates; an
+  existing directory keeps its mode; a concurrent creator's `EEXIST` is
+  judged, not failed on) and nothing else. `makeNotesDir` is gone, and
+  `read`, `search`, `index`, `lint` and `write` all call `notesDir` after
+  their own argument checks, so an argument error, a resolution error, a
+  missing parent and a non-directory `memory/` or `notes` (a dangling
+  symlink included) still create nothing. No lock file: only `write`'s
+  writer makes `notes/.write.lock`. Why: a live-context `index` on a fresh
+  agent printed nothing, so the model was never told its memory exists.
+  Trap: the install guard `[ -e <state dir>/memory ] || cp -R memory …`
+  now skips the starting tree once the agent has made any call (the
+  live-context index at its first input), so the tree must be copied
+  before the agent first runs; both READMEs say so.
+- `cmd/memory/index.go`: when no node loads (an empty store, or one
+  whose every node is skipped) `index` renders `<memory_index>` with the
+  trust line and `<empty>No nodes yet.</empty>` (a new `Empty` field on
+  `indexXML`, `omitempty`, so stores with nodes render exactly as before)
+  instead of returning nothing. No `<tags>` (tags come only from loaded
+  nodes) and no budget pass (nothing to drop). Rejected: a bare
+  `<memory_index/>` without the trust line (D8's line must frame anything
+  shown as memory).
+- `cmd/memory/main.go`, `read.go`, `lint.go`, `search.go`: the package
+  comment, the usage text (`index` "on a store with no nodes, says so";
+  "every verb … creates memory/ and memory/notes/ when they are missing")
+  and the verbs' comments no longer say the read verbs create nothing.
+- `cmd/memory/search.go`: deliberately unchanged in order. The query is
+  parsed after the store is created (D31's order: arguments, then
+  `notes/`, then the query), so a malformed query (`search '"'`) on a
+  missing store fails with `query: unclosed quote` and leaves the empty
+  `memory/notes/`, like `write`'s writer-checked refusals (III.4 known
+  gap). Only `search`'s argument count is checked before the store, as
+  III.2's argument rule. Not pinned by a test: the spec is silent on
+  whether a query error is an "argument error" under III.1.
+- `cmd/memory/empty_store_bin_test.go` (new): the CLI10 acceptance
+  tests. Exact empty-index bytes on a missing store, an empty `notes/` and
+  a `notes/` holding only a broken (tagged) node, and no `<empty>` on the
+  starting tree; each of `read`, `read /`, `index`, `search anything`,
+  `lint`, `lint --exit-zero` as a first call, with and without an existing
+  `memory/`, under umask 077 and 002 (forced down as well as up): its
+  exact empty-store result, exactly `memory/` and `memory/notes/` at
+  0755, no lock file, and a second call
+  changing nothing (snapshot); `read kettle` on a missing store; an
+  existing 0700 `memory/` keeping its mode; argument errors (with and
+  without `memory/`) and resolution errors, dangling symlinks included,
+  creating nothing for every read verb; eight concurrent mixed first calls
+  over 25 fresh parents (checked to fail at once when the `EEXIST` case is
+  removed).
+- `README.md`, `agent/README.md`: the sentences saying the read verbs
+  create nothing, that only `write` creates the store, and that `index`
+  prints nothing on an empty store are corrected; both say to install the
+  starting tree before the agent's first call.
+- No smoke test: this repo has no `scripts/smoke/` (no live environment);
+  the binary tests run the built `memory` end to end.
+
 ## 2026-11-19 - An agent can lint its own store and see the whole report: `lint --exit-zero` and `memory_lint.json`
 
 - `cmd/memory/lint.go`: `lint` takes one option, `--exit-zero` (spec

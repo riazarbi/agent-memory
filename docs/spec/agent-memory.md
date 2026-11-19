@@ -1948,6 +1948,14 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
   leaves the empty `memory/notes/` (as every verb now does) and its lock file.
 - (CLI10) Every verb creates a missing store, so `memory read` in a fresh home directory leaves an
   empty `~/memory/notes/`. The parent-must-exist rule still stops a mistyped parent.
+- (CLI10 acceptance) A `search` query that fails to parse (`'"x'`, `tag:`) exits 1 after the store
+  has been created: D31's order is arguments, then `notes/`, then the query. Harmless.
+- (CLI10 acceptance) The install guard `[ -e <state dir>/memory ]` skips the starting tree once any
+  call has created the empty store, so the tree must be installed before the agent's first memory
+  call (both READMEs say so). Copying it later by hand into the empty `notes/` works.
+- (CLI10 acceptance) A missing store under a parent the process cannot write (a read-only mount)
+  now fails every verb with the create error, where CLI7 read it as empty. An existing `notes/` is
+  unaffected: read verbs then write nothing.
 - (CLI7) The install guard `[ -e <state dir>/memory ]` treats a dangling `memory` symlink as no
   store, so `cp` writes through it; `memory` itself calls that symlink an error. Operator setups
   only.

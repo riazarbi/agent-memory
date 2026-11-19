@@ -72,3 +72,20 @@ Local only: Go toolchain, temp dirs. No network, no live agent.
 - `index.go` returns `nil, nil` when no first-level node loads; that is the case to render.
 - `indexTrust` is the trust line constant; the lock-commit tests use it.
 - Keep the tree lint-clean (`golangci-lint run ./...`, full tree).
+
+## Post-verification notes (2026-11-19)
+- Built in one pass. Pre-filter green; no existing test touched. Production change: `makeNotesDir`
+  folded into `notesDir` (every verb creates the empty store after its argument checks); `index`
+  renders `indexXML{Trust, Empty}` when no first-level node loads. New tests
+  `cmd/memory/empty_store_bin_test.go`.
+- Verifier: all four criteria PASS through the real binary; stores with nodes byte-identical to
+  CLI9's index (including a 250-node overflowing store); 200 rounds of 8 concurrent first calls,
+  0 failures; every wrong-reading mutant killed (one equivalent survivor, `Mkdir`→`MkdirAll`); 9/9
+  inverted assertions failed; tamper and scope clean; govulncheck clean.
+- Recorded as III.4 known gaps: malformed `search` queries fail after store creation; the install
+  guard skips the starting tree once the empty store exists (install the tree first); a read-only
+  parent with no store now fails.
+- Lead edit at banking: one README sentence whose "and so" did not follow, reworded.
+- `wantEmptyIndex` (lock commit) is built from the production `indexTrust`; the builder's test uses
+  an independent literal.
+- Process: the builder's gate command ended with `git status --short | head -0` (read-only, errored).
