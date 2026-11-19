@@ -1856,6 +1856,7 @@ creates a node on its own (III.6).
 | `write` | `STEM [--parent P] [--description D] [--tag T]… [--property K=V]… [--add TEXT]… [--replace ID=TEXT]…` | D29's `memory_write`. `--parent /` is the root: a create under it makes a first-level node (III.6). `--add` and `--replace` are the blocks, in argv order. Any `--tag` replaces the node's tags with the given list. `--property` values are strings. |
 | `search` | `QUERY` | D31's search, with the same syntax and the same result XML. |
 | `index` | none | Prints `<memory_index>`, laid out and budgeted as in D30, or nothing when no node loads. |
+| `lint` | none | Loads the whole store and reports every problem the reader finds (D25), as `<memory_lint>` (III.7). Exit 0 when there are no errors, 2 when there are. Writes nothing. |
 
 - **Argument errors name the argument as the user typed it** (`STEM`, `--parent`, `--add #2`,
   `--replace m-abc123`), never the writer's internal field names.
@@ -1875,6 +1876,8 @@ creates a node on its own (III.6).
   parent says `parent dir <parent> does not exist (from <source>)` (III.1); a missing `notes/` is
   not an error, it is an empty store.
 - **Retry:** "busy" and "changed on disk" (D28) go to stderr with exit 75 (`EX_TEMPFAIL`).
+- **Lint found errors:** `lint` exits 2 when the store has error-severity problems, with its full
+  report on stdout and nothing on stderr (III.7). No other verb exits 2.
 - **No logging, no events.** The agent's own `tool.invoked` and `tool.error` record each call. The
   `memory.*` events of Part II are not emitted.
 
@@ -1915,8 +1918,8 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
   from a download alone.
 
 **Known gaps, recorded not fixed** (CLI1 acceptance, 2026-11-18):
-- Nodes the loader skips do not appear in `read`, and nothing reports them: Part III has no channel
-  for `Store.Problems()`.
+- Nodes the loader skips do not appear in `read`, `search` or `index`, and those verbs say nothing
+  about them. Since CLI8, `lint` is the channel for `Store.Problems()`: run it to see them.
 - (CLI2) Some of the writer's reason texts keep the JSON tool's wording ("omit the id to add a new
   block", "give it as the tags field"). The CLI translates only the argument names. `read` renders
   no properties (D29), so a property is visible only in the file or through `search
@@ -2014,6 +2017,43 @@ changes it by rearranging folders.
   *Seeding*), the first-level rule in D28's create ("never the root"), and §4.6's "the first level is
   fixed", each revised in place.
 
+## III.7 `lint`: checking a store (CLI8, operator ruling 2026-11-19)
+
+The agent's own writes cannot break a store (`write` validates before it saves, D17). Edits made
+another way can: an editor or Obsidian, a git merge, a sync conflict, a script. The reader then
+skips what it cannot load (D25), and a skipped node silently disappears from `read`, `search` and
+`index`. `lint` reports it.
+
+- **`memory [--parent-dir DIR] lint`**, no arguments (any argument is an error, exit 1). It loads
+  the store fresh, as every verb does, and prints:
+  ```xml
+  <memory_lint nodes="41" errors="1" warnings="2">
+    <problem severity="error" path="b">missing frontmatter: a folder note must start with a --- line</problem>
+    <problem severity="warning" path="a">link [[nowhere]] points to a missing node</problem>
+    <problem severity="warning" path="a/notes.txt">not a node folder: this file is ignored and invisible to the agent</problem>
+  </memory_lint>
+  ```
+  `nodes` is the number of nodes that loaded; `errors` and `warnings` count the problems of each
+  severity. There is one `<problem>` per `Store.Problems()` entry, in the library's order (sorted by
+  path), with its severity, its path relative to `notes/` (`.` for `notes/` itself) and its reason
+  as the library words it. With no problems the element has no children. Rendered with
+  `encoding/xml`, indented like the other results.
+- **Severity** is the library's: an *error* means the named node and its subtree are not in the
+  store; a *warning* means it loaded (or was harmlessly ignored) and is reported.
+- **Exit codes:** 0 when `errors` is 0, warnings or not; **2** when `errors` is more than 0, with
+  the report on stdout and stderr empty; 1, with Part III.3's one line on stderr and nothing on
+  stdout, when `lint` itself cannot run (an argument, a resolution or missing-parent error, `memory/`
+  or `notes` not a directory). So `memory --parent-dir DIR lint || alert` fails exactly when nodes
+  are missing from the store or the check could not run.
+- **A missing store** is empty (III.1): `nodes="0" errors="0" warnings="0"`, exit 0.
+- **It writes nothing** and creates nothing: no lock file, no store. It does not take the write
+  lock; every write replaces files by atomic rename, so a concurrent write is seen either before or
+  after.
+- **Report only.** `lint` never repairs. It checks what the reader checks (D25), not what Obsidian
+  thinks, and not whether content is true or current (the audit's job, §6).
+- **No tool file ships for it.** It is an operator's check (a cron job, a git hook, an agent timer
+  job). An operator may still wrap it as a shell tool or a live-context entry like any verb.
+
 ## 5. Decisions
 
 Superseded decisions keep their number; the row says what changed and why.
@@ -2050,7 +2090,7 @@ Superseded decisions keep their number; the row says what changed and why.
 | D28 | Writing to disk | An exclusive OS lock (`flock` on `notes/.write.lock`, bounded 10 s wait, then "busy — retry") serializes writes across processes; one writer per `notes/` per process; each write from a fresh full load; create vs update by stem existence (create: valid unused stem, description, a loaded parent, or the root `/` (CLI7); update: parent absent or matching); writes to skipped nodes refused; atomic temp-file-and-rename; refuse if the file changed on disk since it was read; read back through a full load and roll back on failure. §4.2 *Writing to disk*. |
 | D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: the guidance ships as `agent/prompt/memory_usage.md`, and since CLI7 nothing is seeded: a missing store is empty, and the starting tree ships as `agent/memory/notes/` (III.6); there is no `init`.)* |
 | D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. *(For the CLI, Part III supersedes the injection and the corrective error for a missing `notes/`: since CLI7 a missing `notes/` is an empty store, III.1.)* |
-| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `read`, `write`, `search` and `index`; it seeds nothing, a missing store is empty, and no typology is built in (CLI7, III.6). The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1 and 75 (retry). There is no logging and no capability line. |
+| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `read`, `write`, `search`, `index` and `lint` (CLI8, III.7); it seeds nothing, a missing store is empty, and no typology is built in (CLI7, III.6). The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1, 75 (retry) and, for `lint` only, 2 (errors found). There is no logging and no capability line. |
 | D31 | `memory_search` | Opt-in built-in (catalogued, never seeded, no generation bump); one `query` argument in an Obsidian syntax subset (words, phrases, `-`, `OR`, `tag:`, `path:`, `file:`, `[property:value]`, no parentheses); per-node matching, hit blocks, ranking by hits then recency; 20 nodes / 5 blocks; XML via `encoding/xml`; `memory.searched`. §4.5 *`memory_search`, exactly*. |
 
 ## 6. Out of scope, deferred, open
