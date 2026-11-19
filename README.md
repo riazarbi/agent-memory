@@ -4,7 +4,7 @@ The command is `memory`.
 
 Long-term memory for an AI agent: a tree of markdown notes with YAML frontmatter, which a model can read, write and search, and which a human can browse as an Obsidian vault.
 
-**Status:** the library (`internal/memory`) and the `memory` CLI are built and tested. The CLI's verbs are `read`, `write`, `search` and `index`; it imposes no structure, a missing store is an empty one, and only `write` creates it. The repo's `agent/` folder ships everything an agent needs (shell-tool files, guidance, a live-context entry, an optional starting tree), and every merge to `main` publishes release archives carrying the binary and that folder.
+**Status:** the library (`internal/memory`) and the `memory` CLI are built and tested. The CLI's verbs are `read`, `write`, `search`, `index` and `lint`; it imposes no structure, a missing store is an empty one, and only `write` creates it. The repo's `agent/` folder ships everything an agent needs (shell-tool files, guidance, a live-context entry, an optional starting tree), and every merge to `main` publishes release archives carrying the binary and that folder.
 
 The design is in [`docs/spec/agent-memory.md`](docs/spec/agent-memory.md). The conversation that produced it is in [`docs/research/`](docs/research/).
 
@@ -34,6 +34,8 @@ memory search 'tag:home OR [status:active]'
 
 memory index                       # <memory_index>: the top of the tree and the top tags
 
+memory lint                        # <memory_lint>: every problem in the store; exit 2 if any node is missing
+
 memory --parent-dir /srv/agent/.agent read household   # the store /srv/agent/.agent/memory
 ```
 
@@ -49,7 +51,27 @@ The structure of a store is whatever its tree is. The root, `notes/` itself, is 
 
 `index` prints `<memory_index>`: a trust line, the first-level nodes by stem with their children one level deep (each with its tags, true child count, date and description), and the 50 most used tags. It never shows a filesystem path. It is kept within 200 lines and 25,000 bytes: past either, the oldest second-level entries are dropped first, then the oldest first-level ones, and a notice says how many nodes are not shown. With `notes/` holding no node it prints nothing and exits 0.
 
-Results are XML on stdout with exit 0. An error is one line on stderr with exit 1, naming the argument as typed (`STEM`, `--parent`, `--add #2`, `--replace m-7f3a2k`): an unknown stem lists up to five near matches, and a parent that does not exist says so with where it came from, as in `parent dir /srv/nowhere does not exist (from --parent-dir)` (or `(from MEMORY_PARENT_DIR)`, `(from HOME)`). Exit 75 means retry: the store was busy (another write held its lock for 10 s) or the note changed on disk while `write` ran (an editor that does not take the lock); make the same call again. Dates (`modified`) are in the process's time zone (`TZ`).
+`lint` checks the whole store after edits made outside `write` (an editor or Obsidian, a git merge, a sync conflict, a script). Those can break a note, and the reader then skips it: a skipped node, with everything under it, silently disappears from `read`, `search` and `index`. `lint` takes no arguments, loads the store fresh and prints every problem the reader finds:
+
+```xml
+<memory_lint nodes="41" errors="1" warnings="2">
+  <problem severity="error" path="b">missing frontmatter: a folder note must start with a --- line</problem>
+  <problem severity="warning" path="a">link [[nowhere]] points to a missing node</problem>
+  <problem severity="warning" path="a/notes.txt">not a node folder: this file is ignored and invisible to the agent</problem>
+</memory_lint>
+```
+
+`nodes` counts the nodes that loaded. An *error* means the named node and its subtree are not in the store; a *warning* means it loaded (or was harmlessly ignored) and is worth knowing about, such as a dangling link, a stray file or a block ID used twice. Problems are listed by path, relative to `notes/` (`.` for `notes/` itself), with the reader's own reason. `lint` exits 0 when there are no errors (warnings or not), exit 2 when there are errors (the report on stdout, nothing on stderr), and exit 1, with one line on stderr and no report, when it cannot run at all (an argument, a missing parent, `memory/` or `notes` not a directory). A missing store is empty and clean. `lint` writes nothing, takes no lock and never repairs anything; no tool file ships for it, because it is the operator's check. So `memory --parent-dir DIR lint || alert` fails exactly when nodes are missing or the check could not run, for example in a cron job, or as a git hook in a repo that versions the store:
+
+```bash
+# crontab: mail the report when the agent's store has lost a node
+0 * * * * memory --parent-dir /srv/agent/.agent lint > /tmp/memory-lint.xml || mail -s "memory lint failed" ops@example.com < /tmp/memory-lint.xml
+
+# .git/hooks/pre-commit in a repo whose memory/ is the store: refuse to commit while a note in the working tree is broken
+memory --parent-dir "$(git rev-parse --show-toplevel)" lint > /dev/null || { echo "memory lint found errors: run memory lint" >&2; exit 1; }
+```
+
+Results are XML on stdout with exit 0. An error is one line on stderr with exit 1, naming the argument as typed (`STEM`, `--parent`, `--add #2`, `--replace m-7f3a2k`): an unknown stem lists up to five near matches, and a parent that does not exist says so with where it came from, as in `parent dir /srv/nowhere does not exist (from --parent-dir)` (or `(from MEMORY_PARENT_DIR)`, `(from HOME)`). `lint` alone also exits 2, as above. Exit 75 means retry: the store was busy (another write held its lock for 10 s) or the note changed on disk while `write` ran (an editor that does not take the lock); make the same call again. Dates (`modified`) are in the process's time zone (`TZ`).
 
 ## Wiring it to an agent
 

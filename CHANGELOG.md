@@ -3,6 +3,47 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-19 - `memory lint` reports every problem in a store, and exits 2 when a node is missing from it
+
+- `cmd/memory/lint.go` (new): the `lint` verb (spec III.7). No arguments
+  (`noArgs`, as `index`); the store is found with `notesDir()`, the read
+  verbs' lookup, so a missing store is the empty, clean report and nothing
+  is created (no store, no `.write.lock`: `lint` never touches the
+  writer). It prints `<memory_lint nodes errors warnings>` with one
+  `<problem severity path>reason</problem>` per `Store.Problems()` entry,
+  in the library's order, through `encoding/xml` (D20) so a reason holding
+  `<`, `>` or `&` escapes and decodes back exactly. `nodes` is
+  `len(Store.Nodes())`, so nodes in a skipped subtree are not counted. The
+  library's checks and reason texts are untouched: `lint` is a renderer
+  over what `memory.Load` already reports. With errors it returns its
+  report together with the sentinel `errLintFound`.
+- `cmd/memory/main.go`: `run` prints the verb's output and exits 2
+  (`exitLintErrors`) with nothing on stderr when a verb returns
+  `errLintFound`; every other error keeps its one stderr line and exit 1 or
+  75 exactly as before. Rejected: changing the `verb` signature to return
+  an exit code (it would touch every verb for one verb's need), and
+  printing the report on stderr (III.7 puts it on stdout). Trap: the check
+  for `errLintFound` must come before the generic error branch, or the
+  report is lost and the verdict reads as an error line. The usage text
+  and the package comment list `lint` and its exit 2.
+- `README.md`: the status line lists `lint`; the Usage section has a
+  `memory lint` example and a paragraph on what it reports (errors vs
+  warnings, `.` for `notes/`), its three exit codes, and a cron job and a
+  git pre-commit hook using `memory --parent-dir DIR lint || …`. The exit
+  code paragraph notes that `lint` alone also exits 2.
+- `cmd/memory/lint_bin_test.go` (new): binary tests for each acceptance
+  criterion. Reports are compared problem by problem with
+  `memory.Load(notes).Problems()` run in the test, so a re-sorted,
+  regrouped or reworded report fails; a `notes/` made unreadable
+  (mode 000, skipped as root) gives the one problem at `.`; a
+  snapshot of the aged state dir proves `lint` writes nothing. Also a
+  README check for the documentation above.
+- Deliberately not done: no `--fix` or `--strict`, no failing on
+  warnings, and no tool file or live-context entry in `agent/` (III.7: it
+  is the operator's check; `TestAgentFolderIsComplete` is unchanged). The
+  spec (III.7, III.2's row, III.3's exit 2, III.4's known-gap wording,
+  D32) was already locked before this build and is not changed here.
+
 ## 2026-11-19 - `memory` imposes no structure: nothing is seeded, a missing store is empty, the root is `/`, and the starting tree ships as optional files
 
 - `internal/memory/seed.go`: deleted, with `SeedDefaults` and the seed list

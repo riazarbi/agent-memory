@@ -5,7 +5,9 @@
 // A missing store is an empty one, and only write creates it; memory seeds
 // nothing and names no node (Part III.6). Results are XML on
 // stdout with exit 0; an error is one line on stderr with exit 1, or exit 75
-// when retrying can succeed (busy, changed on disk). It never logs.
+// when retrying can succeed (busy, changed on disk). lint alone exits 2,
+// its report on stdout, when the store has errors (Part III.7). It never
+// logs.
 package main
 
 import (
@@ -27,6 +29,9 @@ import (
 const (
 	exitOK    = 0
 	exitError = 1
+	// exitLintErrors is lint's verdict that nodes are missing from the
+	// store because of an error; its report is on stdout (Part III.7).
+	exitLintErrors = 2
 	// exitRetry is EX_TEMPFAIL: the same call can succeed if made again.
 	exitRetry = 75
 )
@@ -46,6 +51,9 @@ verbs:
                                         a query of several words)
   index                                 the index: top-level nodes, their
                                         children and the top tags
+  lint                                  check the whole store: report every
+                                        problem; exit 0 with none or only
+                                        warnings, 2 when there are errors
 
 The store is <parent>/memory. The parent is --parent-dir DIR (or
 --parent-dir=DIR), given before the verb; else MEMORY_PARENT_DIR from the
@@ -66,6 +74,7 @@ func verbs() map[string]verb {
 		"write":  writeVerb,
 		"search": searchVerb,
 		"index":  indexVerb,
+		"lint":   lintVerb,
 	}
 }
 
@@ -76,7 +85,8 @@ func main() {
 // run takes the options before the verb, then dispatches the verb. Only
 // arguments before the verb can choose the store: a tool file pins it with
 // prepend_args ending in the verb. Nothing reaches stdout unless the verb
-// succeeds.
+// succeeds, except lint's report when it finds errors: that is printed with
+// nothing on stderr and exit 2.
 func run(args []string, stdout, stderr io.Writer) int {
 	loc, args, err := parseLocation(args)
 	if err != nil {
@@ -93,6 +103,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 	out, err := v(loc, args[1:])
+	if errors.Is(err, errLintFound) {
+		_, _ = stdout.Write(out)
+		return exitLintErrors
+	}
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, oneLine(err.Error()))
 		if errors.Is(err, memory.ErrBusy) || errors.Is(err, memory.ErrChangedOnDisk) {

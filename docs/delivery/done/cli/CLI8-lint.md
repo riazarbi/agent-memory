@@ -70,3 +70,17 @@ Local only: Go toolchain, temp dirs. No network, no live agent.
   a distinct exit; keep exit 75 and exit 1 behaviour exactly as they are.
 - The read verbs' store lookup (`notesDir()`, which creates nothing) is the one to use.
 - Keep the tree lint-clean (`golangci-lint run ./...`, full tree).
+
+## Post-verification notes (2026-11-19)
+- Built in one pass. Pre-filter green; no existing test touched. Production change:
+  `cmd/memory/lint.go` (new, ~60 lines) and an `errLintFound` branch in `run` (exit 2, report on
+  stdout). New tests `cmd/memory/lint_bin_test.go`.
+- Verifier: all six criteria PASS through the real binary, results compared line by line with
+  `memory.Load().Problems()`; `lint` returned in 17 ms while another process held the write lock;
+  exit 75 unchanged; 18 of 19 mutations caught; 7/7 inverted assertions failed; tamper and scope
+  clean; govulncheck clean.
+- Survived: rendering a non-empty report unindented (`xml.Marshal`) — no criterion pins it. Low
+  value; left.
+- Builder spec gaps recorded as III.4 known gaps: unreadable `memory/` (exit 1) vs unreadable
+  `notes/` (exit 2); XML's U+FFFD substitution in paths; `lint --` accepted. AC1's "self-closed
+  form" wording was wrong (`encoding/xml` never self-closes); harmless.

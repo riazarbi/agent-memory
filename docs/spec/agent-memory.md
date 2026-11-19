@@ -1950,6 +1950,12 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 - (CLI7 acceptance) The shipped `write` description's example contains the word "people" (in a
   quoted description), so the "names no node" check exempts that one quoted value.
 - (CLI6 acceptance) A dangling symlink as the parent says `does not exist`.
+- (CLI8) An unreadable `notes/` is a library error at `.` (`lint` exits 2, `nodes="0"`), but an
+  unreadable `memory/` fails the store lookup first (`lint` exits 1, `reading …: permission
+  denied`). Both say the store cannot be checked; only the exit code differs.
+- (CLI8) `encoding/xml` replaces invalid UTF-8 and control characters with U+FFFD, so a stray file
+  whose name holds such bytes is reported with a mangled `path`. `lint --` runs like `lint`, as
+  `index --` does.
 
 ## III.5 Not in the CLI
 
