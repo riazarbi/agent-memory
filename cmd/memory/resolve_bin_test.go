@@ -73,6 +73,34 @@ func TestStoreResolution(t *testing.T) {
 			want:   func(dir string) string { return filepath.Join(dir, "nested", "dir", "memory") },
 			absent: []string{".agent"},
 		},
+		{
+			name:   "MEMORY_DIR in the environment is the store itself, and beats AGENT_STATE_DIR",
+			env:    map[string]string{"MEMORY_DIR": filepath.Join(abs, "md-env"), "AGENT_STATE_DIR": filepath.Join(abs, "ignored")},
+			dotenv: dotenv,
+			want:   func(string) string { return filepath.Join(abs, "md-env") },
+			absent: []string{"from-dotenv", ".agent"},
+		},
+		{
+			name:   "MEMORY_DIR in .env beats AGENT_STATE_DIR in the environment",
+			env:    map[string]string{"AGENT_STATE_DIR": filepath.Join(abs, "ignored-too")},
+			dotenv: "AGENT_STATE_DIR=also-ignored\nMEMORY_DIR=\"notes store\" # mine\n",
+			want:   func(dir string) string { return filepath.Join(dir, "notes store") },
+			absent: []string{"also-ignored", ".agent"},
+		},
+		{
+			name:   "MEMORY_DIR in the environment beats MEMORY_DIR in .env",
+			env:    map[string]string{"MEMORY_DIR": "rel/md"},
+			dotenv: "MEMORY_DIR=from-dotenv-md\n",
+			want:   func(dir string) string { return filepath.Join(dir, "rel", "md") },
+			absent: []string{"from-dotenv-md", ".agent"},
+		},
+		{
+			name:   "an empty MEMORY_DIR is unset: the state-dir rules apply",
+			env:    map[string]string{"MEMORY_DIR": ""},
+			dotenv: "MEMORY_DIR=\n" + dotenv,
+			want:   func(dir string) string { return filepath.Join(dir, "from-dotenv", "memory") },
+			absent: []string{".agent"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

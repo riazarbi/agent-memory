@@ -46,13 +46,13 @@ type result struct {
 }
 
 // run executes the binary in dir. The inherited environment loses
-// AGENT_STATE_DIR and TZ; env adds variables (TZ defaults to UTC).
+// MEMORY_DIR, AGENT_STATE_DIR and TZ; env adds variables (TZ defaults to UTC).
 func runBin(t *testing.T, dir string, env map[string]string, args ...string) result {
 	t.Helper()
 	cmd := exec.Command(binPath, args...) //nolint:gosec // the binary this package builds
 	cmd.Dir = dir
 	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "AGENT_STATE_DIR=") || strings.HasPrefix(kv, "TZ=") {
+		if strings.HasPrefix(kv, "MEMORY_DIR=") || strings.HasPrefix(kv, "AGENT_STATE_DIR=") || strings.HasPrefix(kv, "TZ=") {
 			continue
 		}
 		cmd.Env = append(cmd.Env, kv)

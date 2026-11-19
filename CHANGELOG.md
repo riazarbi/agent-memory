@@ -3,6 +3,33 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-19 - `MEMORY_DIR` points `memory` at any store, so it works without an agent
+
+- `cmd/memory/store.go`: `MEMORY_DIR` (the memory folder itself; from
+  the environment, then `./.env`) is checked first. Without it,
+  resolution is as before: `<AGENT_STATE_DIR>/memory`, the state dir from
+  the environment, then `./.env`, then `.agent`. Empty values count as
+  unset. `.env` is read once.
+  - The agent fallback stays, because the agent does not export its
+    default state dir: without it, an agent install would need
+    configuration.
+  - Rejected by the operator: `MEMORY_DIR` alone, which would make an agent
+    with a custom `AGENT_STATE_DIR` set both; and reading `MEMORY_DIR`
+    from the environment only.
+- `cmd/memory/resolve_bin_test.go`: four cases.
+  - `MEMORY_DIR` in the environment is the store itself and beats
+    `AGENT_STATE_DIR`.
+  - `MEMORY_DIR` in `.env` beats `AGENT_STATE_DIR` in the environment.
+  - The environment beats `.env`.
+  - An empty `MEMORY_DIR` is unset.
+
+  Mutations that ignore `MEMORY_DIR`, or treat it as a state dir, each fail
+  them. `binary_test.go`'s `runBin` also strips an inherited `MEMORY_DIR`,
+  so the developer's environment cannot leak in.
+- `docs/spec/agent-memory.md` (III.1, D32) and `README.md`: the new order.
+- Written directly by the delivery lead: a small change. The full gate
+  passes.
+
 ## 2026-11-18 - The CLI's command is `memory`
 
 - The binary is renamed from `agent-memory` to `memory`. It is usable

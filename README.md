@@ -32,7 +32,7 @@ memory search 'tag:home OR [status:active]'
 memory index                       # <memory_index>: the top of the tree and the top tags
 ```
 
-The store is `<state dir>/memory`, where the state dir is found as the agent finds it: `AGENT_STATE_DIR` from the environment, else `AGENT_STATE_DIR` from `./.env`, else `.agent`, relative to the working directory. There is no `--store` flag; point it at another store by setting `AGENT_STATE_DIR`.
+The store is `MEMORY_DIR` if set (from the environment, then `./.env`): the memory folder itself. Otherwise it is `<state dir>/memory`, where the state dir is found as the agent finds it: `AGENT_STATE_DIR` from the environment, else from `./.env`, else `.agent`. Relative paths are taken against the working directory. With an agent you set nothing; on its own, `export MEMORY_DIR=~/notes`. There is no `--store` flag.
 
 `init` creates `memory/notes/` with the first-level nodes `user`, `projects`, `people` and `topics`, and `memory/protocol/usage.md`, only when `memory/` does not exist; once it exists, `init` changes nothing. `read` and `search` never create anything.
 

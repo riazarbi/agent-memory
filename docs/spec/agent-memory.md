@@ -1788,9 +1788,12 @@ says how the store is reached.
 
 ## III.1 Finding the store
 
-The store is `<state dir>/memory`, the `memory/` folder the agent would have used. The state dir is
-resolved exactly as the agent resolves it, so a shell tool, a livecontext entry or a timer job (all
-of which inherit the agent's environment and working directory) lands on the agent's own store:
+**`MEMORY_DIR` first** (operator ruling, 2026-11-19). `MEMORY_DIR` names the memory folder itself
+(the one holding `notes/` and `protocol/`), from the environment, then from `./.env`. When it is
+unset, the store is `<state dir>/memory`, the `memory/` folder the agent would have used. That way
+an agent install needs no configuration, and standalone use is `MEMORY_DIR=~/notes`. The state dir
+is resolved exactly as the agent resolves it, so a shell tool, a livecontext entry or a timer job
+(all of which inherit the agent's environment and working directory) lands on the agent's own store:
 
 1. `AGENT_STATE_DIR` from the environment, if set and non-empty;
 2. otherwise `AGENT_STATE_DIR` from `./.env`, parsed exactly as the agent parses it
@@ -1806,8 +1809,10 @@ of which inherit the agent's environment and working directory) lands on the age
      be read is an error;
 3. otherwise `.agent`.
 
-A relative state dir is relative to the working directory. There is no `--store` flag. A clone for
-A/B work (D24) is reached by running with a different `AGENT_STATE_DIR`.
+In full: `MEMORY_DIR` (environment, then `./.env`), then `AGENT_STATE_DIR` (environment, then
+`./.env`) plus `/memory`, then `.agent/memory`. Empty values count as unset. A relative path is
+relative to the working directory. There is no `--store` flag. A clone for A/B work (D24) is reached
+with a different `MEMORY_DIR`.
 
 ## III.2 Verbs
 
@@ -1917,7 +1922,7 @@ Superseded decisions keep their number; the row says what changed and why.
 | D28 | Writing to disk | An exclusive OS lock (`flock` on `notes/.write.lock`, bounded 10 s wait, then "busy — retry") serializes writes across processes; one writer per `notes/` per process; each write from a fresh full load; create vs update by stem existence (create: valid unused stem, description, a loaded non-root parent; update: parent absent or matching); writes to skipped nodes refused; atomic temp-file-and-rename; refuse if the file changed on disk since it was read; read back through a full load and roll back on failure. §4.2 *Writing to disk*. |
 | D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. |
 | D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. |
-| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `init`, `read`, `write`, `search` and `index`. The agent knows nothing about it: an operator installs shell-tool files from the repo's `tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<agent state dir>/memory`, found as the agent finds its state dir. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1 and 75 (retry). There is no logging and no capability line. |
+| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `init`, `read`, `write`, `search` and `index`. The agent knows nothing about it: an operator installs shell-tool files from the repo's `tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `MEMORY_DIR` if set; otherwise `<agent state dir>/memory`, found as the agent finds its state dir. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1 and 75 (retry). There is no logging and no capability line. |
 | D31 | `memory_search` | Opt-in built-in (catalogued, never seeded, no generation bump); one `query` argument in an Obsidian syntax subset (words, phrases, `-`, `OR`, `tag:`, `path:`, `file:`, `[property:value]`, no parentheses); per-node matching, hit blocks, ranking by hits then recency; 20 nodes / 5 blocks; XML via `encoding/xml`; `memory.searched`. §4.5 *`memory_search`, exactly*. |
 
 ## 6. Out of scope, deferred, open

@@ -10,6 +10,7 @@ import (
 )
 
 const (
+	memoryDirKey    = "MEMORY_DIR"
 	stateDirKey     = "AGENT_STATE_DIR"
 	defaultStateDir = ".agent"
 	dotenvFile      = ".env"
@@ -18,27 +19,48 @@ const (
 // errNoNotes is Part III.3's corrective error for a store without notes/.
 var errNoNotes = errors.New("memory has no notes/ folder; run memory init")
 
-// memoryDir is the store, <state dir>/memory (Part III.1). The state dir is
-// AGENT_STATE_DIR from the environment if set and non-empty; otherwise
-// AGENT_STATE_DIR from ./.env if non-empty; otherwise .agent. A relative one
-// stays relative, so it is taken against the working directory.
+// memoryDir is the store (Part III.1): MEMORY_DIR, the memory folder itself,
+// from the environment, then from ./.env; otherwise <state dir>/memory, the
+// state dir being AGENT_STATE_DIR from the environment, then from ./.env,
+// then .agent. Empty values count as unset. A relative path stays relative,
+// so it is taken against the working directory.
 func memoryDir() (string, error) {
-	dir := os.Getenv(stateDirKey)
-	if dir == "" {
-		data, err := os.ReadFile(dotenvFile)
-		switch {
-		case err == nil:
-			dir, _ = dotenvValue(string(data), stateDirKey)
-		case !errors.Is(err, fs.ErrNotExist):
-			// Refusing beats guessing: falling back to .agent could land on
-			// a store the agent does not use.
-			return "", fmt.Errorf("reading %s: %w", dotenvFile, err)
-		}
+	dotenv, err := readDotenv()
+	if err != nil {
+		return "", err
 	}
+	if dir := setting(memoryDirKey, dotenv); dir != "" {
+		return dir, nil
+	}
+	dir := setting(stateDirKey, dotenv)
 	if dir == "" {
 		dir = defaultStateDir
 	}
 	return filepath.Join(dir, "memory"), nil
+}
+
+// setting is key from the environment if non-empty, else from the .env text.
+func setting(key, dotenv string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	v, _ := dotenvValue(dotenv, key)
+	return v
+}
+
+// readDotenv returns ./.env's text, or "" when there is none. An unreadable
+// .env is an error: falling back could land on a store the agent does not
+// use, and refusing beats guessing.
+func readDotenv() (string, error) {
+	data, err := os.ReadFile(dotenvFile)
+	switch {
+	case err == nil:
+		return string(data), nil
+	case errors.Is(err, fs.ErrNotExist):
+		return "", nil
+	default:
+		return "", fmt.Errorf("reading %s: %w", dotenvFile, err)
+	}
 }
 
 // notesDir is the store's notes/, which must exist as a directory: the
