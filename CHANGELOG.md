@@ -3,32 +3,83 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
-## 2026-11-19 - `MEMORY_DIR` points `memory` at any store, so it works without an agent
+## 2026-11-19 - `memory` is addressed, not agent-aware: the store is `<parent>/memory` from `--parent-dir`, `MEMORY_PARENT_DIR` or `HOME`, and the tool files pin an agent's store
 
-- `cmd/memory/store.go`: `MEMORY_DIR` (the memory folder itself; from
-  the environment, then `./.env`) is checked first. Without it,
-  resolution is as before: `<AGENT_STATE_DIR>/memory`, the state dir from
-  the environment, then `./.env`, then `.agent`. Empty values count as
-  unset. `.env` is read once.
-  - The agent fallback stays, because the agent does not export its
-    default state dir: without it, an agent install would need
-    configuration.
-  - Rejected by the operator: `MEMORY_DIR` alone, which would make an agent
-    with a custom `AGENT_STATE_DIR` set both; and reading `MEMORY_DIR`
-    from the environment only.
-- `cmd/memory/resolve_bin_test.go`: four cases.
-  - `MEMORY_DIR` in the environment is the store itself and beats
-    `AGENT_STATE_DIR`.
-  - `MEMORY_DIR` in `.env` beats `AGENT_STATE_DIR` in the environment.
-  - The environment beats `.env`.
-  - An empty `MEMORY_DIR` is unset.
-
-  Mutations that ignore `MEMORY_DIR`, or treat it as a state dir, each fail
-  them. `binary_test.go`'s `runBin` also strips an inherited `MEMORY_DIR`,
-  so the developer's environment cannot leak in.
-- `docs/spec/agent-memory.md` (III.1, D32) and `README.md`: the new order.
-- Written directly by the delivery lead: a small change. The full gate
-  passes.
+- `cmd/memory/store.go`: the store is `<parent>/memory`, the parent being
+  `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`
+  (spec III.1). This replaces the unreleased `MEMORY_DIR` change below,
+  which never shipped.
+  - The `.env` reader and every `AGENT_STATE_DIR` / `MEMORY_DIR` lookup are
+    gone, and the `.agent` fallback with them. Why: an environment variable
+    cannot say where it came from, so an agent's store must not depend on
+    what the operator's shell exports. The tool files name the agent's
+    store instead.
+  - A variable set but empty is an error (`MEMORY_PARENT_DIR is set but
+    empty`, `HOME is set but empty`), never a fall-through: an empty
+    `MEMORY_PARENT_DIR` falling to `HOME` would put an agent's or a
+    script's notes in a person's `~/memory`. With no source at all the
+    error names all three. `os.LookupEnv`, not `Getenv`, is what tells
+    set-but-empty from unset.
+  - `parseLocation` takes `--parent-dir DIR` or `--parent-dir=DIR` before
+    the verb, at most once, never empty, and stops at the first other
+    argument. Only the double-dash spelling is recognised there (the verbs'
+    own flags also take `-name`): `-parent-dir` is an unknown verb, which
+    fails safe.
+  - The verbs receive a `location` value instead of calling a global
+    resolver, so the store has one source of truth per call. Argument
+    errors still come before the store is looked at; an empty
+    `--parent-dir` is refused before the verb, as malformed syntax, while
+    the environment is read only when a verb needs the store.
+  - The trap: after the verb, `--parent-dir` is deliberately not an
+    option. Each verb's parser refuses it as an unknown flag (`write`'s
+    `--parent` does not match it by prefix: `flag.Lookup` is exact), or
+    `search` counts it as a second argument. Scanning all of argv for it
+    would let a model's argument, which always comes after a tool file's
+    verb, move the store.
+- `cmd/memory/main.go`: `run` parses the location before looking up the
+  verb; `memory --parent-dir P` with no verb prints the usage, as `memory`
+  alone does. The usage line is `memory [--parent-dir DIR] <verb>`, and the
+  usage text and package comment state the three sources and the
+  empty-value rule.
+- `cmd/memory/{init,read,write,search,index}`: each verb takes the
+  `location`; behaviour otherwise unchanged.
+- `tools/*.json`: `prepend_args` are `["--parent-dir", "${AGENT_STATE_DIR}",
+  "<verb>"]`, which the agent replaces with its absolute state dir (agent
+  CHANGELOG 2026-11-19). An exported `MEMORY_PARENT_DIR` can then never
+  redirect an agent's memory. Descriptions unchanged: they never mention
+  `--parent-dir`, and `TestToolFilesSchema` fails if one does.
+- `cmd/memory/addressing_bin_test.go` (new): the flag beating both
+  variables in both spellings and relative to the working dir; the
+  environment order; every empty or missing source failing with one line
+  and creating nothing (checked for `init`, `read` and `write`); a missing
+  value and a repeated flag (with both stores seeded, so a last-wins
+  implementation would succeed); `--parent-dir` after the verb never
+  changing the store, including after a tool file's pinned one; no `.env`,
+  `AGENT_STATE_DIR` or `MEMORY_DIR` consulted, and none of them named in
+  the usage or in any production file; the README's store paragraph.
+  Mutations checked: an empty value falling through, `HOME` before
+  `MEMORY_PARENT_DIR`, and the last `--parent-dir` winning each fail them.
+  The superseded tests (`runBin`, `TestToolFilesSchema`, `toolCaller`,
+  `TestReadmeWiringGuide`; `TestStoreResolution` and `TestDotenvValue`
+  deleted) were edited in the lock commit, not here.
+- `README.md`: the usage section's store paragraph states the order and the
+  empty-value rule. The wiring guide's `init` step runs `memory
+  --parent-dir <state dir> init`; the tool-file step explains the pinned
+  `prepend_args` and how to point an agent at a shared store (edit the
+  path; never delete the pair, which falls back to `$HOME/memory`); the
+  live-context entry's `args` are `["--parent-dir", "${AGENT_STATE_DIR}",
+  "index"]`; and a note says the files need an agent that substitutes
+  `${AGENT_STATE_DIR}`, and how an older one fails.
+- `CLAUDE.md`: the CI section names the released binaries `memory`, not
+  `agent-memory` (a line the rename missed).
+- Not done, as out of scope: `~` expansion, a `--store` flag, any
+  agent-side change, `internal/memory`, and the other III.4 known gaps.
+- `CHANGELOG.md`: the `MEMORY_DIR` entry of the same day is removed. That change was committed but
+  never released, and this one replaces it; leaving both would put a contradiction into the first
+  release's notes.
+- `cmd/memory/initverb.go`, `cmd/memory/store.go`: three `//nolint:gosec` (G703, path from argv).
+  The store path now comes from the command line by design (III.1), so the taint finding is the
+  feature.
 
 ## 2026-11-18 - The CLI's command is `memory`
 

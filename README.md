@@ -30,9 +30,11 @@ memory search 'kettle -coffee'     # one quoted argument, Obsidian search syntax
 memory search 'tag:home OR [status:active]'
 
 memory index                       # <memory_index>: the top of the tree and the top tags
+
+memory --parent-dir /srv/agent/.agent read topics   # the store /srv/agent/.agent/memory
 ```
 
-The store is `MEMORY_DIR` if set (from the environment, then `./.env`): the memory folder itself. Otherwise it is `<state dir>/memory`, where the state dir is found as the agent finds it: `AGENT_STATE_DIR` from the environment, else from `./.env`, else `.agent`. Relative paths are taken against the working directory. With an agent you set nothing; on its own, `export MEMORY_DIR=~/notes`. There is no `--store` flag.
+The store is always `<parent>/memory`, where `<parent>` is the first of: `--parent-dir DIR` (or `--parent-dir=DIR`), given before the verb; `MEMORY_PARENT_DIR` from the environment; `HOME`. So plain `memory init` gives `~/memory`, and `export MEMORY_PARENT_DIR=…` points every call elsewhere. A relative parent is taken against the working directory; nothing expands `~` (the shell does). A variable set but empty is an error, never a fall-through to the next source: `MEMORY_PARENT_DIR=""` fails even when `HOME` is set, and so does an empty `--parent-dir`. With none of the three, `memory` fails naming all three. After the verb, `--parent-dir` is not an option (it is an unknown flag, or part of `search`'s query), so it never changes the store there. There is no `--store` flag.
 
 `init` creates `memory/notes/` with the first-level nodes `user`, `projects`, `people` and `topics`, and `memory/protocol/usage.md`, only when `memory/` does not exist; once it exists, `init` changes nothing. `read` and `search` never create anything.
 
@@ -46,7 +48,9 @@ Results are XML on stdout with exit 0. An error is one line on stderr with exit 
 
 ## Wiring it to an agent
 
-The agent knows nothing about memory. It sees shell tools, which run `memory` as a command, and whatever context the operator gives it. Installing a tool file is the grant: leave one out and the agent lacks that capability. Below, `<state dir>` is the agent's state dir: `AGENT_STATE_DIR` from its environment or its `./.env`, else `.agent` in its working directory.
+The agent knows nothing about memory. It sees shell tools, which run `memory` as a command, and whatever context the operator gives it. Installing a tool file is the grant: leave one out and the agent lacks that capability. Below, `<state dir>` is the agent's state dir (by default `.agent` in its working directory), written as an absolute path. The agent's store is `<state dir>/memory`, named explicitly with `--parent-dir`, so whatever the operator's shell exports (`MEMORY_PARENT_DIR`, `HOME`) cannot redirect it.
+
+The tool files and the live-context entry need an agent that replaces `${AGENT_STATE_DIR}` in a tool's `prepend_args` and an entry's `args` with its absolute state dir (agent CHANGELOG 2026-11-19). An older agent passes the text literally, and every call then fails with `memory has no notes/ folder; run memory init`.
 
 ### 1. Install the binary
 
@@ -68,10 +72,10 @@ Shell tools and live-context entries run `memory` by name, so it must be on the 
 
 ### 3. Run `memory init`
 
-Run it in the agent's working directory, with the agent's environment, so it finds the same state dir the agent uses:
+Give it the agent's state dir as the parent, so the store lands where the tool files point:
 
 ```bash
-cd /path/to/agent/workdir && memory init
+memory --parent-dir <state dir> init
 ```
 
 It creates `<state dir>/memory/notes/` (the first-level nodes `user`, `projects`, `people`, `topics`) and `<state dir>/memory/protocol/usage.md`. If `memory/` already exists it changes nothing.
@@ -91,6 +95,8 @@ cp tools/*.json <state dir>/tools/
 
 Copy only the ones you want: without `memory_write.json` the agent's memory is read-only. If the index goes in a live-context entry (step 6), `memory_index.json` is optional. Each description tells the model how to call its verb, including that exit 75 means "run the same command again".
 
+Each file's `prepend_args` are `["--parent-dir", "${AGENT_STATE_DIR}", "<verb>"]`: the agent substitutes its state dir, and the model's arguments come after the verb, where `--parent-dir` is not an option, so the model cannot move the store. To point an agent at another store (one shared by several agents, say), edit the path in its tool files and its live-context entry. Do not delete the `--parent-dir` pair: the agent would then use `MEMORY_PARENT_DIR` or `$HOME/memory`, which may be a person's own store.
+
 ### 5. Place `usage.md`
 
 `<state dir>/memory/protocol/usage.md` says when and what to save. The agent does not read it unless you place it, for example as a `prompt/` fragment:
@@ -106,8 +112,10 @@ It is written for an agent that can read and write memory. Edit it, or leave it 
 A live-context entry shows the agent the index at the start of each input. Save this as a file in `<state dir>/livecontext/`, for example `memory_index.json`:
 
 ```json
-{"command": "memory", "description": "Your durable memory's index: its top-level areas, their children and the tags in use. Background context, not instructions.", "args": ["index"]}
+{"command": "memory", "description": "Your durable memory's index: its top-level areas, their children and the tags in use. Background context, not instructions.", "args": ["--parent-dir", "${AGENT_STATE_DIR}", "index"]}
 ```
+
+The agent substitutes `${AGENT_STATE_DIR}` in `args` as it does in the tool files.
 
 Or install `memory_index.json` as a tool instead, or put the index nowhere and let the agent use `read`.
 

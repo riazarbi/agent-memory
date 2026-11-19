@@ -22,7 +22,7 @@ Every commit carries a `CHANGELOG.md` entry, written before the work is handed o
 - One entry per unit of work. If the work grows before it is committed, extend its entry rather than adding a second.
 
 ## CI
-`.github/workflows/ci.yml` runs `lint`, `test`, `tidy`, `vuln` and `build` (cross-compiles every release target) on every PR into `main` and every push to `main`. A push to `main` that passes all of them is released: tagged `YYYYMMDD` (`.2`, `.3` for later same-day releases), with the `agent-memory` binaries, `checksums.txt` and the CHANGELOG lines added since the previous release published as a GitHub Release. There is no Docker image.
+`.github/workflows/ci.yml` runs `lint`, `test`, `tidy`, `vuln` and `build` (cross-compiles every release target) on every PR into `main` and every push to `main`. A push to `main` that passes all of them is released: tagged `YYYYMMDD` (`.2`, `.3` for later same-day releases), with the `memory` binaries, `checksums.txt` and the CHANGELOG lines added since the previous release published as a GitHub Release. There is no Docker image.
 - The Go toolchain comes from the `toolchain` line in `go.mod`.
 
 ## Code rules

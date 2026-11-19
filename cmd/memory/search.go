@@ -48,14 +48,14 @@ type omittedXML struct {
 // search has no flags, so a query starting with - (an exclusion) is not
 // one; a leading -- is dropped, as the end of flags. As in memory_search,
 // the arguments are checked, then notes/, then the query is parsed.
-func searchVerb(args []string) ([]byte, error) {
+func searchVerb(loc location, args []string) ([]byte, error) {
 	if len(args) > 0 && args[0] == endOfFlags {
 		args = args[1:]
 	}
 	if len(args) > 1 {
 		return nil, fmt.Errorf("QUERY: search takes the query as one argument, got %d; quote it: memory search '%s'", len(args), strings.Join(args, " "))
 	}
-	notes, err := notesDir()
+	notes, err := loc.notesDir()
 	if err != nil {
 		return nil, err
 	}

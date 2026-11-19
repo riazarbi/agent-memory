@@ -111,3 +111,22 @@ distinct directories under `<W>`. "Creates nothing" means no new file or directo
 - Keep it small. Production code should shrink: the `.env` reader goes, and resolution is three
   lookups. The global option needs only a few lines in `run` before the verb is looked up.
 - `TestNoStoreFlag` must keep passing: `--store` after the verb is still an unknown flag.
+
+## Post-verification notes (banked 2026-11-19)
+- **Verdict:** accepted on the first build. The independent verifier passed all seven criteria live
+  against the built binary (`env -i`, HOME and MEMORY_PARENT_DIR in scratch dirs; the real
+  `~/memory` never existed), killed 21 of 21 injected faults, and found every one of 10 inverted
+  assertions failing. No existing test changed beyond the lock edits; nothing out of scope built.
+- **Lock amended once:** the lock's `toolCaller` edit tripped `prealloc`; fixed in a lock amendment
+  and copied into the room.
+- **govulncheck:** denied to the builder and the verifier (network); run by the lead in the repo.
+- **Recorded as a known gap (III.4):** `memory --parent-dir --parent-dir init` takes the second as
+  the directory. Not reachable from a tool file.
+- **Builder spec gaps not acted on:** the three flag-error texts are not pinned in the spec
+  (`--parent-dir: needs a directory`, `--parent-dir: given twice; give it once, before the verb`,
+  `--parent-dir is given but empty`); `memory --parent-dir P` with no verb prints the usage (several
+  lines, as bare `memory` does); `-parent-dir` (one dash) is an unknown verb; error order between
+  environment and verb-argument errors is unspecified; an older agent's literal `${AGENT_STATE_DIR}`
+  gets the "run memory init" advice rather than "upgrade the agent" (documented in the README).
+- **Acted on at banking:** the unreleased `MEMORY_DIR` CHANGELOG entry removed (it contradicted this
+  one in the first release's notes); the three `//nolint:gosec` recorded in the CHANGELOG.

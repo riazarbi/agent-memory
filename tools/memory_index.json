@@ -3,6 +3,8 @@
   "description": "Show the index of your durable memory: the top-level areas and their children, each with its stem, tags, number of children, date last modified and description, and the 50 most used tags. Takes no arguments. Read a node to see its blocks and all its children. If the command exits with code 75 (\"busy\" or \"changed on disk\"), run the same command again.",
   "read_only": true,
   "prepend_args": [
+    "--parent-dir",
+    "${AGENT_STATE_DIR}",
     "index"
   ],
   "forbidden_args": [],

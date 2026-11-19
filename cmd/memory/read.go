@@ -123,12 +123,12 @@ func parseReadArgs(args []string) (readArgs, error) {
 // readVerb is D29's memory_read: a node with its blocks, children to
 // --depth, links and backlinks; one block with --block; the root with no
 // STEM. Argument errors come before the store is looked at.
-func readVerb(args []string) ([]byte, error) {
+func readVerb(loc location, args []string) ([]byte, error) {
 	ra, err := parseReadArgs(args)
 	if err != nil {
 		return nil, err
 	}
-	notes, err := notesDir()
+	notes, err := loc.notesDir()
 	if err != nil {
 		return nil, err
 	}

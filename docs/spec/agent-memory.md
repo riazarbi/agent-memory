@@ -1896,6 +1896,9 @@ what the operator's shell happens to export. The agent-specific choice lives in 
 - (CLI4) A store outside an agent's state dir (shared by several agents) is not covered by the
   agent's state-dir write deny: that agent's file tools can edit notes directly, bypassing `write`'s
   checks and lock.
+- (CLI4) `memory --parent-dir --parent-dir init` takes the second `--parent-dir` as the directory
+  (as every flag here takes its next argument), creating `./--parent-dir/memory`. No tool file can
+  produce it.
 - (CLI4) An operator who deletes the `--parent-dir` pair from a tool file points the agent at
   `$HOME/memory`, which may be a human's personal store.
 

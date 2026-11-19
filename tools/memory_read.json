@@ -3,6 +3,8 @@
   "description": "Read your durable memory. Give a node's stem as the first argument to get its description, tags and blocks (each with its ID), its children, the nodes it links to, and the nodes that link to it. Add --depth N to list children N levels deep (default 1; 0 lists none). Add --block ID to read a single block. Give no stem to list the top-level areas and the tags in use. Each flag and its value are separate arguments, for example [\"outbox-etiquette\", \"--depth\", \"2\"]. If the command exits with code 75 (\"busy\" or \"changed on disk\"), run the same command again.",
   "read_only": true,
   "prepend_args": [
+    "--parent-dir",
+    "${AGENT_STATE_DIR}",
     "read"
   ],
   "forbidden_args": [],

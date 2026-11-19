@@ -1,8 +1,9 @@
-// Command memory is an AI agent's long-term memory store, used through
-// shell tools (docs/spec/agent-memory.md Part III). The store is
-// <state dir>/memory, found as the agent finds its state dir. Results are
-// XML on stdout with exit 0; an error is one line on stderr with exit 1, or
-// exit 75 when retrying can succeed (busy, changed on disk). It never logs.
+// Command memory is a long-term memory store, a tree of markdown notes,
+// used on its own or through shell tools (docs/spec/agent-memory.md Part
+// III). The store is <parent>/memory, the parent being --parent-dir given
+// before the verb, else MEMORY_PARENT_DIR, else HOME. Results are XML on
+// stdout with exit 0; an error is one line on stderr with exit 1, or exit 75
+// when retrying can succeed (busy, changed on disk). It never logs.
 package main
 
 import (
@@ -28,7 +29,7 @@ const (
 	exitRetry = 75
 )
 
-const usage = `usage: memory <verb> [arguments]
+const usage = `usage: memory [--parent-dir DIR] <verb> [arguments]
 
 verbs:
   init                                  seed the memory store if it is missing
@@ -43,13 +44,16 @@ verbs:
   index                                 the index: first-level nodes, their
                                         children and the top tags
 
-The store is <state dir>/memory. The state dir is AGENT_STATE_DIR from the
-environment, else AGENT_STATE_DIR from ./.env, else .agent; a relative one is
-taken against the working directory.
+The store is <parent>/memory. The parent is --parent-dir DIR (or
+--parent-dir=DIR), given before the verb; else MEMORY_PARENT_DIR from the
+environment; else HOME. A relative parent is taken against the working
+directory. An empty --parent-dir, or a variable set but empty, is an error.
+After the verb, --parent-dir is not an option.
 `
 
-// verb runs one verb's arguments and returns its result for stdout.
-type verb func(args []string) ([]byte, error)
+// verb runs one verb's arguments against the store at loc and returns its
+// result for stdout.
+type verb func(loc location, args []string) ([]byte, error)
 
 func verbs() map[string]verb {
 	return map[string]verb{
@@ -65,9 +69,16 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-// run dispatches args[0] as the verb. Nothing reaches stdout unless the
-// verb succeeds.
+// run takes the options before the verb, then dispatches the verb. Only
+// arguments before the verb can choose the store: a tool file pins it with
+// prepend_args ending in the verb. Nothing reaches stdout unless the verb
+// succeeds.
 func run(args []string, stdout, stderr io.Writer) int {
+	loc, args, err := parseLocation(args)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, oneLine(err.Error()))
+		return exitError
+	}
 	if len(args) == 0 {
 		_, _ = io.WriteString(stderr, usage)
 		return exitError
@@ -77,7 +88,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "unknown verb %q\n%s", args[0], usage)
 		return exitError
 	}
-	out, err := v(args[1:])
+	out, err := v(loc, args[1:])
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, oneLine(err.Error()))
 		if errors.Is(err, memory.ErrBusy) || errors.Is(err, memory.ErrChangedOnDisk) {

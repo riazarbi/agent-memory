@@ -107,12 +107,12 @@ func parseWriteArgs(args []string) (writeArgs, error) {
 // writeVerb is D29's memory_write: a new stem is a create, a loaded one an
 // update. Argument errors come before the store is looked at, and the
 // writer's field errors are renamed to the arguments as typed.
-func writeVerb(args []string) ([]byte, error) {
+func writeVerb(loc location, args []string) ([]byte, error) {
 	wa, err := parseWriteArgs(args)
 	if err != nil {
 		return nil, err
 	}
-	notes, err := notesDir()
+	notes, err := loc.notesDir()
 	if err != nil {
 		return nil, err
 	}

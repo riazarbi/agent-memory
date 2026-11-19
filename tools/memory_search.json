@@ -3,6 +3,8 @@
   "description": "Search your durable memory. Give the whole query as one argument, for example [\"priya escalation\"]. It uses Obsidian search syntax: words must all appear somewhere in a node, in any order and any case; a \"quoted phrase\" must appear as written; -word excludes nodes containing it; OR separates alternatives (a b OR c means a and b, or c). tag:name matches a node's tags or a #tag in its text; path:text and file:text match a node's location or stem; [property:value] and [property] match its properties. Returns up to 20 nodes, those with the most matching blocks first, each with its description and up to 5 matching blocks with their IDs. If the command exits with code 75 (\"busy\" or \"changed on disk\"), run the same command again.",
   "read_only": true,
   "prepend_args": [
+    "--parent-dir",
+    "${AGENT_STATE_DIR}",
     "search"
   ],
   "forbidden_args": [],

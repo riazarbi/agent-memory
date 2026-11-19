@@ -10,68 +10,92 @@ import (
 )
 
 const (
-	memoryDirKey    = "MEMORY_DIR"
-	stateDirKey     = "AGENT_STATE_DIR"
-	defaultStateDir = ".agent"
-	dotenvFile      = ".env"
+	parentDirFlag = "--parent-dir"
+	parentDirKey  = "MEMORY_PARENT_DIR"
+	homeKey       = "HOME"
 )
 
-// errNoNotes is Part III.3's corrective error for a store without notes/.
-var errNoNotes = errors.New("memory has no notes/ folder; run memory init")
+var (
+	// errNoNotes is Part III.3's corrective error for a store without notes/.
+	errNoNotes = errors.New("memory has no notes/ folder; run memory init")
+	// errNoStore is Part III.1's error when no source names a parent.
+	errNoStore = errors.New("no store: give " + parentDirFlag + ", or set " + parentDirKey + " or " + homeKey)
+)
 
-// memoryDir is the store (Part III.1): MEMORY_DIR, the memory folder itself,
-// from the environment, then from ./.env; otherwise <state dir>/memory, the
-// state dir being AGENT_STATE_DIR from the environment, then from ./.env,
-// then .agent. Empty values count as unset. A relative path stays relative,
-// so it is taken against the working directory.
-func memoryDir() (string, error) {
-	dotenv, err := readDotenv()
-	if err != nil {
-		return "", err
-	}
-	if dir := setting(memoryDirKey, dotenv); dir != "" {
-		return dir, nil
-	}
-	dir := setting(stateDirKey, dotenv)
-	if dir == "" {
-		dir = defaultStateDir
-	}
-	return filepath.Join(dir, "memory"), nil
+// location is where the store is looked for: parentDir is the
+// --parent-dir given before the verb, or "" when none was.
+type location struct {
+	parentDir string
 }
 
-// setting is key from the environment if non-empty, else from the .env text.
-func setting(key, dotenv string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+// parseLocation takes the options before the verb (Part III.1): only
+// --parent-dir DIR or --parent-dir=DIR, at most once, never empty. It stops
+// at the first other argument, the verb, and returns the rest from there.
+func parseLocation(args []string) (location, []string, error) {
+	var loc location
+	for len(args) > 0 {
+		name, value, hasValue := strings.Cut(args[0], "=")
+		if name != parentDirFlag {
+			break
+		}
+		if loc.parentDir != "" {
+			return loc, nil, fmt.Errorf("%s: given twice; give it once, before the verb", parentDirFlag)
+		}
+		args = args[1:]
+		if !hasValue {
+			if len(args) == 0 {
+				return loc, nil, fmt.Errorf("%s: needs a directory", parentDirFlag)
+			}
+			value, args = args[0], args[1:]
+		}
+		if value == "" {
+			return loc, nil, fmt.Errorf("%s is given but empty", parentDirFlag)
+		}
+		loc.parentDir = value
 	}
-	v, _ := dotenvValue(dotenv, key)
-	return v
+	return loc, args, nil
 }
 
-// readDotenv returns ./.env's text, or "" when there is none. An unreadable
-// .env is an error: falling back could land on a store the agent does not
-// use, and refusing beats guessing.
-func readDotenv() (string, error) {
-	data, err := os.ReadFile(dotenvFile)
-	switch {
-	case err == nil:
-		return string(data), nil
-	case errors.Is(err, fs.ErrNotExist):
-		return "", nil
-	default:
-		return "", fmt.Errorf("reading %s: %w", dotenvFile, err)
+// memoryDir is the store, <parent>/memory (Part III.1). The parent is
+// --parent-dir, else MEMORY_PARENT_DIR, else HOME. A variable set but empty
+// is an error, never a fall-through. A relative parent stays relative, so it
+// is taken against the working directory.
+func (l location) memoryDir() (string, error) {
+	parent := l.parentDir
+	if parent == "" {
+		var err error
+		if parent, err = parentFromEnv(); err != nil {
+			return "", err
+		}
 	}
+	return filepath.Join(parent, "memory"), nil
+}
+
+// parentFromEnv is the first of MEMORY_PARENT_DIR and HOME that is set.
+func parentFromEnv() (string, error) {
+	for _, key := range []string{parentDirKey, homeKey} {
+		v, set := os.LookupEnv(key)
+		switch {
+		case !set:
+			continue
+		case v == "":
+			return "", fmt.Errorf("%s is set but empty", key)
+		default:
+			return v, nil
+		}
+	}
+	return "", errNoStore
 }
 
 // notesDir is the store's notes/, which must exist as a directory: the
 // read verbs never create it.
-func notesDir() (string, error) {
-	dir, err := memoryDir()
+func (l location) notesDir() (string, error) {
+	dir, err := l.memoryDir()
 	if err != nil {
 		return "", err
 	}
 	notes := filepath.Join(dir, "notes")
-	info, err := os.Stat(notes)
+	info, err := os.Stat(notes) //nolint:gosec // the store the caller named (III.1); reaching it is this command's job
 	switch {
 	case errors.Is(err, fs.ErrNotExist), err == nil && !info.IsDir():
 		return "", errNoNotes
@@ -79,44 +103,4 @@ func notesDir() (string, error) {
 		return "", fmt.Errorf("reading notes/: %w", err)
 	}
 	return notes, nil
-}
-
-// dotenvValue returns key's value in a .env file's text, parsed exactly as
-// the agent parses .env (Part III.1): each line trimmed; blank lines and
-// lines starting with # skipped; a leading "export " (with a space)
-// removed; the line split at the first =, the key trimmed. The first
-// occurrence of the key wins. found reports whether it is assigned at all.
-func dotenvValue(data, key string) (value string, found bool) {
-	for _, line := range strings.Split(data, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || line[0] == '#' {
-			continue
-		}
-		line = strings.TrimPrefix(line, "export ")
-		k, v, ok := strings.Cut(line, "=")
-		if ok && strings.TrimSpace(k) == key {
-			return dotenvParseValue(v), true
-		}
-	}
-	return "", false
-}
-
-// dotenvParseValue: the value is left-trimmed of spaces and tabs. If it then
-// starts with a quote that appears again, it is the text between them.
-// Otherwise (an unterminated quote included) it is cut at the first " #" or
-// "\t#", then trimmed.
-func dotenvParseValue(v string) string {
-	v = strings.TrimLeft(v, " \t")
-	if v != "" && (v[0] == '"' || v[0] == '\'') {
-		if end := strings.IndexByte(v[1:], v[0]); end >= 0 {
-			return v[1 : end+1]
-		}
-	}
-	if i := strings.Index(v, " #"); i >= 0 {
-		v = v[:i]
-	}
-	if i := strings.Index(v, "\t#"); i >= 0 {
-		v = v[:i]
-	}
-	return strings.TrimSpace(v)
 }

@@ -35,11 +35,11 @@ type indexXML struct {
 }
 
 // indexVerb prints <memory_index>, or nothing when no node loads.
-func indexVerb(args []string) ([]byte, error) {
+func indexVerb(loc location, args []string) ([]byte, error) {
 	if err := noArgs("index", args); err != nil {
 		return nil, err
 	}
-	notes, err := notesDir()
+	notes, err := loc.notesDir()
 	if err != nil {
 		return nil, err
 	}
