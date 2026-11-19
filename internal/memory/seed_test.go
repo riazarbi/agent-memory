@@ -1,47 +1,10 @@
 package memory
 
 import (
-	"bufio"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
-
-// specUsageText returns the default usage.md exactly as the spec pins it:
-// the lines of the ```markdown fence that follows "seeded verbatim" in
-// docs/spec/agent-memory.md, each ending in a newline.
-func specUsageText(t *testing.T) string {
-	t.Helper()
-	f, err := os.Open(filepath.Join("..", "..", "docs", "spec", "agent-memory.md"))
-	if err != nil {
-		t.Fatalf("open spec: %v", err)
-	}
-	defer func() { _ = f.Close() }()
-	var b strings.Builder
-	state := 0 // 0: looking for the anchor, 1: for the fence, 2: inside
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := sc.Text()
-		switch state {
-		case 0:
-			if strings.Contains(line, "`usage.md`, seeded verbatim") {
-				state = 1
-			}
-		case 1:
-			if line == "```markdown" {
-				state = 2
-			}
-		case 2:
-			if line == "```" {
-				return b.String()
-			}
-			b.WriteString(line + "\n")
-		}
-	}
-	t.Fatal("spec has no seeded usage.md block")
-	return ""
-}
 
 // The first level the spec seeds (D29), stem -> description.
 var specFirstLevel = map[string]string{
@@ -51,23 +14,19 @@ var specFirstLevel = map[string]string{
 	"topics":   "Everything else worth knowing",
 }
 
-func TestUsageTextIsTheSpecText(t *testing.T) {
-	if want := specUsageText(t); UsageText != want {
-		t.Errorf("UsageText differs from the spec's usage.md:\n got %q\nwant %q", UsageText, want)
-	}
-}
-
-func TestSeedDefaults_FreshCreatesUsageAndFirstLevel(t *testing.T) {
+// The guidance is not seeded: it ships as agent/prompt/memory_usage.md
+// (Part III.4). memory/ holds notes/ and nothing else.
+func TestSeedDefaults_FreshCreatesFirstLevelOnly(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "memory")
 	if err := SeedDefaults(dir); err != nil {
 		t.Fatalf("SeedDefaults: %v", err)
 	}
-	got, err := os.ReadFile(filepath.Join(dir, "protocol", "usage.md"))
+	top, err := os.ReadDir(dir)
 	if err != nil {
-		t.Fatalf("usage.md: %v", err)
+		t.Fatal(err)
 	}
-	if string(got) != specUsageText(t) {
-		t.Errorf("usage.md is not byte-equal to the spec text:\n%q", got)
+	if len(top) != 1 || top[0].Name() != "notes" {
+		t.Errorf("memory/ holds %v, want only notes/", top)
 	}
 	assertSeededFirstLevel(t, Load(filepath.Join(dir, "notes")))
 	// Nothing else is seeded: no stray temp dirs beside memory/.
@@ -119,20 +78,6 @@ func TestSeedDefaults_RerunChangesNothing(t *testing.T) {
 	}
 	if after := snapshot(t, dir); !sameSnapshot(before, after) {
 		t.Errorf("second seed changed memory/:\nbefore %v\nafter  %v", before, after)
-	}
-}
-
-func TestSeedDefaults_DeletedUsageStaysDeleted(t *testing.T) {
-	dir := seeded(t)
-	usage := filepath.Join(dir, "protocol", "usage.md")
-	if err := os.Remove(usage); err != nil {
-		t.Fatal(err)
-	}
-	if err := SeedDefaults(dir); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(usage); !os.IsNotExist(err) {
-		t.Errorf("usage.md was resurrected: %v", err)
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 
 // wiringSteps is the README wiring guide's steps, in order, each found by a
 // word its heading must hold (case-insensitive).
-var wiringSteps = []string{"install", "path", "init", "tools", "usage.md", "live-context"}
+var wiringSteps = []string{"install", "path", "init", "agent"}
 
 // readmeSection returns the body of the "## <title…>" section, up to the
 // next "## " heading.
@@ -41,20 +41,6 @@ func splitSteps(section string) (headings, bodies []string) {
 	return headings, bodies
 }
 
-// firstJSONBlock is the content of the first ```json fence in s.
-func firstJSONBlock(t *testing.T, s string) string {
-	t.Helper()
-	_, after, ok := strings.Cut(s, "```json\n")
-	if !ok {
-		t.Fatal("no ```json block")
-	}
-	block, _, ok := strings.Cut(after, "```")
-	if !ok {
-		t.Fatal("unclosed ```json block")
-	}
-	return block
-}
-
 // Acceptance criterion 4: the README's wiring guide documents install,
 // PATH, init, copying the tool files, placing usage.md and a live-context
 // entry, in that order, and the entry is valid JSON in the live-context
@@ -77,8 +63,7 @@ func TestReadmeWiringGuide(t *testing.T) {
 
 	mentions := map[int][]string{
 		0: {"memory_<tag>_<os>_<arch>.tar.gz", "checksums.txt", "go build"},
-		3: {"tools/*.json", "<state dir>/tools/"},
-		4: {"memory/protocol/usage.md"},
+		3: {"agent/README.md"},
 	}
 	for step, words := range mentions {
 		for _, w := range words {
@@ -88,7 +73,11 @@ func TestReadmeWiringGuide(t *testing.T) {
 		}
 	}
 
-	checkLiveContextEntry(t, firstJSONBlock(t, bodies[5]))
+	entry, err := os.ReadFile(filepath.Join(repoRoot(t), "agent", "livecontext", "memory_index.json")) //nolint:gosec // the repo's own file
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkLiveContextEntry(t, string(entry))
 }
 
 // checkLiveContextEntry: block is one JSON object in the agent's

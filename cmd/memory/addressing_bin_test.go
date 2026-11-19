@@ -38,7 +38,7 @@ func isEmptyDir(t *testing.T, what, dir string) {
 // isStore fails unless parent/memory is a seeded store.
 func isStore(t *testing.T, parent string) {
 	t.Helper()
-	for _, p := range []string{"memory/notes/topics/topics.md", "memory/protocol/usage.md"} {
+	for _, p := range []string{"memory/notes/topics/topics.md", "memory/notes/user/user.md"} {
 		if !exists(filepath.Join(parent, filepath.FromSlash(p))) {
 			t.Errorf("%s does not exist", filepath.Join(parent, p))
 		}

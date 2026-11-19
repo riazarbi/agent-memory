@@ -105,7 +105,7 @@ var flagMention = regexp.MustCompile(`--[a-z][a-z0-9-]*`)
 // keys, runs memory with its verb prepended, has the right read_only
 // and allow_user_args, and its description names exactly its verb's flags.
 func TestToolFilesSchema(t *testing.T) {
-	dir := filepath.Join(repoRoot(t), "tools")
+	dir := filepath.Join(repoRoot(t), "agent", "tools")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -114,7 +114,7 @@ func TestToolFilesSchema(t *testing.T) {
 	for _, e := range entries {
 		names = append(names, e.Name())
 	}
-	check(t, "files in tools/", names, []string{"memory_index.json", "memory_read.json", "memory_search.json", "memory_write.json"})
+	check(t, "files in agent/tools/", names, []string{"memory_index.json", "memory_read.json", "memory_search.json", "memory_write.json"})
 
 	for file, verb := range shippedTools {
 		tool := loadTool(t, filepath.Join(dir, file))
@@ -169,7 +169,7 @@ func checkDescriptionFlags(t *testing.T, file, verb string, tool shellTool) {
 func toolCaller(t *testing.T, dir string) func(file string, userArgs ...string) string {
 	tools := map[string]shellTool{}
 	for file := range shippedTools {
-		tools[file] = loadTool(t, filepath.Join(repoRoot(t), "tools", file))
+		tools[file] = loadTool(t, filepath.Join(repoRoot(t), "agent", "tools", file))
 	}
 	return func(file string, userArgs ...string) string {
 		t.Helper()

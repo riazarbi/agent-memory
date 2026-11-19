@@ -21,19 +21,16 @@ var seedDescriptions = map[string]string{
 }
 
 // Acceptance criterion 2, first part: on a missing store init seeds the four
-// first-level nodes and usage.md, exits 0 and says what it created.
+// first-level nodes (and, since CLI5, nothing else), exits 0 and says what it
+// created.
 func TestInitSeedsAMissingStore(t *testing.T) {
 	dir := t.TempDir()
 	r := runBin(t, dir, nil, "init")
 	mustSucceed(t, r)
 	store := filepath.Join(dir, ".agent", "memory")
 
-	usage, err := os.ReadFile(filepath.Join(store, "protocol", "usage.md")) //nolint:gosec // a test temp dir
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(usage) != memory.UsageText {
-		t.Errorf("usage.md is not the D19 text verbatim:\n%s", usage)
+	if exists(filepath.Join(store, "protocol")) {
+		t.Error("init seeded protocol/; the guidance ships as agent/prompt/memory_usage.md")
 	}
 
 	st := memory.Load(filepath.Join(store, "notes"))
@@ -50,7 +47,7 @@ func TestInitSeedsAMissingStore(t *testing.T) {
 	decode(t, r.stdout, &out)
 	check(t, "result element", out.XMLName.Local, "init")
 	check(t, "seeded", out.Seeded, "true")
-	check(t, "created", out.Created, []string{"notes/people/people.md", "notes/projects/projects.md", "notes/topics/topics.md", "notes/user/user.md", "protocol/usage.md"})
+	check(t, "created", out.Created, []string{"notes/people/people.md", "notes/projects/projects.md", "notes/topics/topics.md", "notes/user/user.md"})
 }
 
 type fileState struct {
@@ -146,22 +143,8 @@ func TestInitSecondRunChangesNothing(t *testing.T) {
 	}
 }
 
-// Acceptance criterion 2, third part: a deleted usage.md stays deleted, and
-// an existing memory/ is never topped up.
+// Acceptance criterion 2, third part: an existing memory/ is never topped up.
 func TestInitNeverTopsUp(t *testing.T) {
-	t.Run("deleted usage.md", func(t *testing.T) {
-		dir := t.TempDir()
-		mustSucceed(t, runBin(t, dir, nil, "init"))
-		usage := filepath.Join(dir, ".agent", "memory", "protocol", "usage.md")
-		if err := os.Remove(usage); err != nil {
-			t.Fatal(err)
-		}
-		r := runBin(t, dir, nil, "init")
-		mustSucceed(t, r)
-		if exists(usage) {
-			t.Error("init recreated a deleted usage.md")
-		}
-	})
 	t.Run("deleted first-level node", func(t *testing.T) {
 		dir := t.TempDir()
 		mustSucceed(t, runBin(t, dir, nil, "init"))
