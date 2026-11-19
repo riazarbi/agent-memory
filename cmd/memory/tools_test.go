@@ -182,12 +182,12 @@ func toolCaller(t *testing.T, dir string) func(file string, userArgs ...string) 
 				t.Fatalf("%s forbids %q, which this call needs", file, a)
 			}
 		}
-		prepend := make([]string, len(tool.PrependArgs))
-		for i, a := range tool.PrependArgs {
-			prepend[i] = strings.ReplaceAll(a, "${AGENT_STATE_DIR}", filepath.Join(dir, ".agent"))
+		argv := make([]string, 0, len(tool.PrependArgs)+len(userArgs))
+		for _, a := range tool.PrependArgs {
+			argv = append(argv, strings.ReplaceAll(a, "${AGENT_STATE_DIR}", filepath.Join(dir, ".agent")))
 		}
 		decoy := map[string]string{"MEMORY_PARENT_DIR": filepath.Join(dir, "decoy")}
-		r := runBin(t, dir, decoy, append(prepend, userArgs...)...)
+		r := runBin(t, dir, decoy, append(argv, userArgs...)...)
 		mustSucceed(t, r)
 		return r.stdout
 	}
