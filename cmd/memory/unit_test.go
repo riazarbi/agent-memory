@@ -8,39 +8,6 @@ import (
 	"testing"
 )
 
-func TestDotenvValue(t *testing.T) {
-	cases := []struct {
-		name, data, want string
-		found            bool
-	}{
-		{"plain", "AGENT_STATE_DIR=state\n", "state", true},
-		{"double quotes", `AGENT_STATE_DIR="a b"`, "a b", true},
-		{"single quotes", `AGENT_STATE_DIR='a b'`, "a b", true},
-		{"quoted, then a comment", `AGENT_STATE_DIR="a # b" # comment`, "a # b", true},
-		{"inline comment", "AGENT_STATE_DIR=state # comment", "state", true},
-		{"hash inside a word is text", "AGENT_STATE_DIR=st#ate", "st#ate", true},
-		{"export prefix", "export AGENT_STATE_DIR=state", "state", true},
-		{"spaces around", "  AGENT_STATE_DIR = state  ", "state", true},
-		{"CRLF", "A=1\r\nAGENT_STATE_DIR=state\r\n", "state", true},
-		{"comment line", "# AGENT_STATE_DIR=no\n", "", false},
-		{"other key", "AGENT_STATE_DIRX=no\nXAGENT_STATE_DIR=no\n", "", false},
-		{"no equals", "AGENT_STATE_DIR\n", "", false},
-		{"empty value", "AGENT_STATE_DIR=\n", "", true},
-		{"first wins", "AGENT_STATE_DIR=one\nAGENT_STATE_DIR=two\n", "one", true},
-		{"export with a tab is not a prefix", "export\tAGENT_STATE_DIR=no\n", "", false},
-		{"a leading # is kept", "AGENT_STATE_DIR=#state", "#state", true},
-		{"tab comment", "AGENT_STATE_DIR=state\t# comment", "state", true},
-		{"unterminated quote: the unquoted rule", `AGENT_STATE_DIR="state # comment`, `"state`, true},
-		{"unterminated quote, tab comment", "AGENT_STATE_DIR='st ate\t# comment", "'st ate", true},
-	}
-	for _, tc := range cases {
-		got, found := dotenvValue(tc.data, stateDirKey)
-		if got != tc.want || found != tc.found {
-			t.Errorf("%s: got (%q, %v), want (%q, %v)", tc.name, got, found, tc.want, tc.found)
-		}
-	}
-}
-
 func TestParseArgsInterleaved(t *testing.T) {
 	newFS := func() (*flag.FlagSet, *string, *string) {
 		fs := flag.NewFlagSet("read", flag.ContinueOnError)

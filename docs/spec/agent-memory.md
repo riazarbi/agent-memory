@@ -1788,31 +1788,37 @@ says how the store is reached.
 
 ## III.1 Finding the store
 
-**`MEMORY_DIR` first** (operator ruling, 2026-11-19). `MEMORY_DIR` names the memory folder itself
-(the one holding `notes/` and `protocol/`), from the environment, then from `./.env`. When it is
-unset, the store is `<state dir>/memory`, the `memory/` folder the agent would have used. That way
-an agent install needs no configuration, and standalone use is `MEMORY_DIR=~/notes`. The state dir
-is resolved exactly as the agent resolves it, so a shell tool, a livecontext entry or a timer job
-(all of which inherit the agent's environment and working directory) lands on the agent's own store:
+**Addressing, not discovery** (operator rulings, 2026-11-19; they replace the `MEMORY_DIR` ruling
+of the same day, never released). `memory` knows nothing about agents. It operates on the store
+`<parent>/memory`, where `<parent>` is the first of:
 
-1. `AGENT_STATE_DIR` from the environment, if set and non-empty;
-2. otherwise `AGENT_STATE_DIR` from `./.env`, parsed exactly as the agent parses it
-   (`loadDotEnv` / `parseDotEnvValue` in the agent's `internal/config/config.go`):
-   - each line is trimmed, and blank lines and lines starting with `#` are skipped;
-   - a leading `export ` (with a space) is removed;
-   - the line splits at the first `=`, and the key is trimmed;
-   - the value is left-trimmed of spaces and tabs. If it then starts with `"` or `'` and that
-     quote appears again, the value is the text between them. Otherwise it is cut at the first
-     ` #` or `\t#`, then trimmed. An unterminated quote falls through to the unquoted rule;
-   - **the first occurrence of a key wins**;
-   - an empty value counts as unset (falls through to `.agent`). A `.env` that exists but cannot
-     be read is an error;
-3. otherwise `.agent`.
+1. **`--parent-dir DIR`**, given *before the verb*: `memory --parent-dir DIR read topics`, or
+   `memory --parent-dir=DIR read topics`;
+2. **`MEMORY_PARENT_DIR`** from the environment;
+3. **`HOME`** from the environment.
 
-In full: `MEMORY_DIR` (environment, then `./.env`), then `AGENT_STATE_DIR` (environment, then
-`./.env`) plus `/memory`, then `.agent/memory`. Empty values count as unset. A relative path is
-relative to the working directory. There is no `--store` flag. A clone for A/B work (D24) is reached
-with a different `MEMORY_DIR`.
+Rules, exactly:
+- The store is always `<parent>/memory`. No source names the store folder itself.
+- A relative `<parent>` is taken against the working directory. Nothing expands `~` (the shell does).
+- **Set but empty is an error, never a fall-through.** `MEMORY_PARENT_DIR=""` fails with
+  `MEMORY_PARENT_DIR is set but empty`, even when `HOME` is set; `HOME=""` (with no
+  `MEMORY_PARENT_DIR`) fails with `HOME is set but empty`; `--parent-dir ""` or `--parent-dir=`
+  fails naming `--parent-dir`.
+- With no flag, `MEMORY_PARENT_DIR` unset and `HOME` unset: an error naming all three
+  (`no store: give --parent-dir, or set MEMORY_PARENT_DIR or HOME`).
+- `--parent-dir` with no value, or given twice before the verb, is an error naming it.
+- **After the verb, `--parent-dir` is not an option.** Each verb's own argument rules apply, so it is
+  an unknown flag (`init`, `read`, `write`, `index`), or part of `search`'s one verbatim argument.
+  It never changes the store. This is what lets a tool file pin the store: `prepend_args` ends with
+  the verb, and the model's arguments always come after it.
+- No `.env` is read, and no agent variable (`AGENT_STATE_DIR`) is consulted.
+- Every resolution error is Part III.3's one line on stderr with exit 1, and creates nothing.
+
+Why: an environment variable cannot say where it came from, so an agent's store must not depend on
+what the operator's shell happens to export. The agent-specific choice lives in the tool files
+(III.4), which name the agent's state dir explicitly; standalone use is `memory init` (giving
+`~/memory`) or `export MEMORY_PARENT_DIR=…`. A clone for A/B work (D24) is reached with a different
+`--parent-dir`.
 
 ## III.2 Verbs
 
@@ -1848,11 +1854,18 @@ with a different `MEMORY_DIR`.
 
 - **Tool files.** The repo ships `tools/memory_read.json`, `memory_write.json`,
   `memory_search.json` and `memory_index.json` (index takes no model arguments:
-  `allow_user_args: false`). They are argv shell tools (`"command": "memory"`, `prepend_args` the
-  verb), and their descriptions are D29's and D31's, adapted to flags. Installing a file is the
+  `allow_user_args: false`). They are argv shell tools (`"command": "memory"`), with
+  `prepend_args` `["--parent-dir", "${AGENT_STATE_DIR}", "<verb>"]`, and their descriptions are
+  D29's and D31's, adapted to flags. The descriptions never mention `--parent-dir`. The agent
+  replaces `${AGENT_STATE_DIR}` with its absolute state dir (agent spec
+  `child-environment.md` E3, agent CHANGELOG 2026-11-19); an older agent passes the text
+  literally, and every call then fails with `memory has no notes/ folder; run memory init`. To point
+  an agent at another store (a store shared by several agents), the operator edits the path in its
+  tool files and its live-context entry. Installing a file is the
   grant (D13). Leaving one out removes that capability.
 - **The index.** `memory index` goes wherever the operator wants it: a livecontext entry (seen
-  at the start of each input, in the user message), a tool, or nowhere.
+  at the start of each input, in the user message; its `args` are
+  `["--parent-dir", "${AGENT_STATE_DIR}", "index"]`, substituted the same way), a tool, or nowhere.
 - **Guidance.** `init` writes `memory/protocol/usage.md`. To use it, the operator places it, for
   example as a `prompt/` fragment. Nothing gates it on the tools any more. The operator who chooses
   the tools also chooses the guidance.
@@ -1880,6 +1893,11 @@ with a different `MEMORY_DIR`.
   it.
 - (CLI3) Re-running the release job on an already-released commit publishes a `.2` release with
   empty notes.
+- (CLI4) A store outside an agent's state dir (shared by several agents) is not covered by the
+  agent's state-dir write deny: that agent's file tools can edit notes directly, bypassing `write`'s
+  checks and lock.
+- (CLI4) An operator who deletes the `--parent-dir` pair from a tool file points the agent at
+  `$HOME/memory`, which may be a human's personal store.
 
 ## III.5 Not in the CLI
 
@@ -1922,7 +1940,7 @@ Superseded decisions keep their number; the row says what changed and why.
 | D28 | Writing to disk | An exclusive OS lock (`flock` on `notes/.write.lock`, bounded 10 s wait, then "busy — retry") serializes writes across processes; one writer per `notes/` per process; each write from a fresh full load; create vs update by stem existence (create: valid unused stem, description, a loaded non-root parent; update: parent absent or matching); writes to skipped nodes refused; atomic temp-file-and-rename; refuse if the file changed on disk since it was read; read back through a full load and roll back on failure. §4.2 *Writing to disk*. |
 | D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. |
 | D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. |
-| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `init`, `read`, `write`, `search` and `index`. The agent knows nothing about it: an operator installs shell-tool files from the repo's `tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `MEMORY_DIR` if set; otherwise `<agent state dir>/memory`, found as the agent finds its state dir. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1 and 75 (retry). There is no logging and no capability line. |
+| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `init`, `read`, `write`, `search` and `index`. The agent knows nothing about it: an operator installs shell-tool files from the repo's `tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1 and 75 (retry). There is no logging and no capability line. |
 | D31 | `memory_search` | Opt-in built-in (catalogued, never seeded, no generation bump); one `query` argument in an Obsidian syntax subset (words, phrases, `-`, `OR`, `tag:`, `path:`, `file:`, `[property:value]`, no parentheses); per-node matching, hit blocks, ranking by hits then recency; 20 nodes / 5 blocks; XML via `encoding/xml`; `memory.searched`. §4.5 *`memory_search`, exactly*. |
 
 ## 6. Out of scope, deferred, open

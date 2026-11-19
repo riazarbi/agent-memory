@@ -45,23 +45,44 @@ type result struct {
 	code   int
 }
 
-// run executes the binary in dir. The inherited environment loses
-// MEMORY_DIR, AGENT_STATE_DIR and TZ; env adds variables (TZ defaults to UTC).
+// envUnset, as a value in runBin's env, leaves that variable out entirely.
+const envUnset = "\x00unset"
+
+// runBinDefaults are the variables runBin sets unless env names them. With
+// MEMORY_PARENT_DIR at <dir>/.agent the store is <dir>/.agent/memory, and
+// HOME points into the temp dir so no test can reach a real ~/memory.
+func runBinDefaults(dir string) map[string]string {
+	return map[string]string{
+		"TZ":                "UTC",
+		"MEMORY_PARENT_DIR": filepath.Join(dir, ".agent"),
+		"HOME":              filepath.Join(dir, "home"),
+	}
+}
+
+// run executes the binary in dir. The inherited environment loses TZ,
+// HOME, MEMORY_PARENT_DIR and the retired MEMORY_DIR and AGENT_STATE_DIR;
+// runBinDefaults fills the first three, and env overrides any of them
+// (envUnset removes one).
 func runBin(t *testing.T, dir string, env map[string]string, args ...string) result {
 	t.Helper()
 	cmd := exec.Command(binPath, args...) //nolint:gosec // the binary this package builds
 	cmd.Dir = dir
 	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "MEMORY_DIR=") || strings.HasPrefix(kv, "AGENT_STATE_DIR=") || strings.HasPrefix(kv, "TZ=") {
+		name, _, _ := strings.Cut(kv, "=")
+		switch name {
+		case "MEMORY_DIR", "AGENT_STATE_DIR", "TZ", "HOME", "MEMORY_PARENT_DIR":
 			continue
 		}
 		cmd.Env = append(cmd.Env, kv)
 	}
-	if _, ok := env["TZ"]; !ok {
-		cmd.Env = append(cmd.Env, "TZ=UTC")
-	}
+	vars := runBinDefaults(dir)
 	for k, v := range env {
-		cmd.Env = append(cmd.Env, k+"="+v)
+		vars[k] = v
+	}
+	for k, v := range vars {
+		if v != envUnset {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
 	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr

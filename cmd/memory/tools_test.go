@@ -119,7 +119,7 @@ func TestToolFilesSchema(t *testing.T) {
 	for file, verb := range shippedTools {
 		tool := loadTool(t, filepath.Join(dir, file))
 		check(t, file+" command", tool.Command, "memory")
-		check(t, file+" prepend_args", tool.PrependArgs, []string{verb})
+		check(t, file+" prepend_args", tool.PrependArgs, []string{"--parent-dir", "${AGENT_STATE_DIR}", verb})
 		if strings.TrimSpace(tool.Description) == "" {
 			t.Errorf("%s: empty description", file)
 		}
@@ -162,8 +162,10 @@ func checkDescriptionFlags(t *testing.T, file, verb string, tool shellTool) {
 }
 
 // toolCaller runs the binary in dir as the agent runs a shell tool: the
-// file's prepend_args, then the model's arguments, which the file must
-// allow.
+// file's prepend_args with ${AGENT_STATE_DIR} replaced by the agent's
+// absolute state dir (<dir>/.agent, agent spec child-environment.md E3),
+// then the model's arguments, which the file must allow. MEMORY_PARENT_DIR
+// points at a decoy, so the store must come from the file's --parent-dir.
 func toolCaller(t *testing.T, dir string) func(file string, userArgs ...string) string {
 	tools := map[string]shellTool{}
 	for file := range shippedTools {
@@ -180,7 +182,12 @@ func toolCaller(t *testing.T, dir string) func(file string, userArgs ...string) 
 				t.Fatalf("%s forbids %q, which this call needs", file, a)
 			}
 		}
-		r := runBin(t, dir, nil, append(append([]string(nil), tool.PrependArgs...), userArgs...)...)
+		prepend := make([]string, len(tool.PrependArgs))
+		for i, a := range tool.PrependArgs {
+			prepend[i] = strings.ReplaceAll(a, "${AGENT_STATE_DIR}", filepath.Join(dir, ".agent"))
+		}
+		decoy := map[string]string{"MEMORY_PARENT_DIR": filepath.Join(dir, "decoy")}
+		r := runBin(t, dir, decoy, append(prepend, userArgs...)...)
 		mustSucceed(t, r)
 		return r.stdout
 	}

@@ -118,7 +118,7 @@ func checkLiveContextEntry(t *testing.T, block string) {
 		t.Error("the live-context block holds more than one JSON value")
 	}
 	check(t, "entry command", entry.Command, "memory")
-	check(t, "entry args", entry.Args, []string{"index"})
+	check(t, "entry args", entry.Args, []string{"--parent-dir", "${AGENT_STATE_DIR}", "index"})
 	if strings.TrimSpace(entry.Description) == "" {
 		t.Error("the live-context entry has no description")
 	}
