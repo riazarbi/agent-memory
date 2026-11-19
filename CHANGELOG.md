@@ -3,6 +3,12 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-19 - The README no longer links to a design transcript that is not in the repo
+
+- `README.md`: dropped "The conversation that produced it is in `docs/research/`". That folder is
+  empty locally and git keeps no empty folders, so the link was dead on GitHub. The spec link
+  stays; the spec is the design record. No code change.
+
 ## 2026-11-19 - CLAUDE.md requires the docs and agent/ files to change with the code
 
 - `CLAUDE.md`: new section "Docs and agent files travel with the code". A change to what a verb

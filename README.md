@@ -6,7 +6,7 @@ Long-term memory for an AI agent: a tree of markdown notes with YAML frontmatter
 
 **Status:** the library (`internal/memory`) and the `memory` CLI are built and tested. The CLI's verbs are `read`, `write`, `search`, `index` and `lint`; it imposes no structure, and a missing store is an empty one, created empty by the first call of any verb. The repo's `agent/` folder ships everything an agent needs (shell-tool files, guidance, a live-context entry, an optional starting tree), and every merge to `main` publishes release archives carrying the binary and that folder.
 
-The design is in [`docs/spec/agent-memory.md`](docs/spec/agent-memory.md). The conversation that produced it is in [`docs/research/`](docs/research/).
+The design is in [`docs/spec/agent-memory.md`](docs/spec/agent-memory.md).
 
 ## Usage
 
