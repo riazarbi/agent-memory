@@ -146,9 +146,7 @@ func TestEmptyNotesIsNotSeeded(t *testing.T) {
 	before := snapshot(t, parent)
 	r := runBin(t, w, nil, "index")
 	mustSucceed(t, r)
-	if r.stdout != "" {
-		t.Errorf("index on an empty notes/ printed %q", r.stdout)
-	}
+	check(t, "index on an empty notes/", r.stdout, wantEmptyIndex)
 	readEmpty := runBin(t, w, nil, "read")
 	mustSucceed(t, readEmpty)
 	var root xRoot

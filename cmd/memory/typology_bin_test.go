@@ -114,9 +114,6 @@ func TestMissingStoreIsEmpty(t *testing.T) {
 		if withMemory {
 			mkdirs(t, filepath.Join(parent, "memory"))
 		}
-		ageTree(t, parent)
-		before := snapshot(t, parent)
-
 		read := runBin(t, w, nil, "read")
 		mustSucceed(t, read)
 		var root xRoot
@@ -131,7 +128,7 @@ func TestMissingStoreIsEmpty(t *testing.T) {
 
 		index := runBin(t, w, nil, "index")
 		mustSucceed(t, index)
-		check(t, what+": index stdout", index.stdout, "")
+		check(t, what+": index stdout", index.stdout, wantEmptyIndex)
 
 		search := runBin(t, w, nil, "search", "anything")
 		mustSucceed(t, search)
@@ -143,10 +140,7 @@ func TestMissingStoreIsEmpty(t *testing.T) {
 		line := mustFail(t, runBin(t, w, nil, "read", "kettle"))
 		check(t, what+": unknown stem", line, `STEM "kettle": no such node`)
 
-		sameSnapshot(t, before, snapshot(t, parent))
-		if !withMemory {
-			isEmptyDir(t, what+": the parent", parent)
-		}
+		check(t, what+": the parent", treeUnder(t, parent), emptyStoreTree)
 	}
 }
 

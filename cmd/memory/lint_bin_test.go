@@ -100,7 +100,7 @@ func TestLintCleanStore(t *testing.T) {
 	got, _ = runLint(t, w, 0)
 	check(t, "empty store counts", [3]string{got.Nodes, got.Errors, got.Warnings}, [3]string{"0", "0", "0"})
 	check(t, "empty store problems", got.Problems, []xProblem{})
-	isEmptyDir(t, "lint on a missing store", parent)
+	check(t, "lint on a missing store leaves", treeUnder(t, parent), emptyStoreTree)
 }
 
 // Acceptance criterion 2: errors exit 2 with the full report on stdout and

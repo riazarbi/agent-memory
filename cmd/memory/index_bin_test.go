@@ -135,6 +135,13 @@ func TestIndexTagCap(t *testing.T) {
 
 // Acceptance criterion 1: with no tags there is no <tags>; with no loadable
 // node index prints nothing and exits 0.
+// wantEmptyIndex is index's output when no node loads (III.2, CLI10).
+const wantEmptyIndex = "<memory_index>" + indexTrust + "\n  <empty>No nodes yet.</empty>\n</memory_index>\n"
+
+// emptyStoreTree is what a verb leaves on a missing store: the empty
+// memory/notes/ and nothing else (III.1, CLI10).
+var emptyStoreTree = []string{"memory/", "memory/notes/"}
+
 func TestIndexEmpty(t *testing.T) {
 	dir, notes := seeded(t)
 	if out := runIndex(t, dir); strings.Contains(out, "<tags") {
@@ -146,15 +153,15 @@ func TestIndexEmpty(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if out := runIndex(t, dir); out != "" {
-		t.Errorf("empty notes/: stdout %q, want nothing", out)
+	if out := runIndex(t, dir); out != wantEmptyIndex {
+		t.Errorf("empty notes/: stdout %q, want %q", out, wantEmptyIndex)
 	}
 
 	// A node that does not load (a heading in its body) is not a node.
 	writeNode(t, notes, "broken", "---\ndescription: Broken\n---\n\n# Heading\n")
 	writeFile(t, filepath.Join(notes, "stray.txt"), "stray\n")
-	if out := runIndex(t, dir); out != "" {
-		t.Errorf("notes/ with no loadable node: stdout %q, want nothing", out)
+	if out := runIndex(t, dir); out != wantEmptyIndex {
+		t.Errorf("notes/ with no loadable node: stdout %q, want %q", out, wantEmptyIndex)
 	}
 }
 

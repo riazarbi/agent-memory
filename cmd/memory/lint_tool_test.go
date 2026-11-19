@@ -65,7 +65,7 @@ func TestLintExitZeroKeepsTheReport(t *testing.T) {
 	missing := runBin(t, w, nil, "lint", "--exit-zero")
 	mustSucceed(t, missing)
 	check(t, "missing store report", missing.stdout, "<memory_lint nodes=\"0\" errors=\"0\" warnings=\"0\"></memory_lint>\n")
-	isEmptyDir(t, "lint --exit-zero on a missing store", parent)
+	check(t, "lint --exit-zero on a missing store leaves", treeUnder(t, parent), emptyStoreTree)
 }
 
 // Acceptance criterion 1: --exit-zero never turns a failure to run into

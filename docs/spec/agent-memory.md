@@ -1833,16 +1833,16 @@ creates a node on its own (III.6).
   `memory` creates `memory/` inside the parent, never the parent itself, so a mistyped
   `--parent-dir` or `MEMORY_PARENT_DIR` (or an agent that passed `${AGENT_STATE_DIR}` literally)
   fails loudly instead of starting a new store somewhere unexpected.
-- **Reading a missing store.** When `<parent>/memory` or `<parent>/memory/notes` does not exist,
-  `read`, `search` and `index` behave as on an empty `notes/` and create nothing: `read` with no
-  stem prints the root with no nodes and no tags; `read STEM` is the unknown-stem error;
-  `search` prints `matched="0"`; `index` prints nothing (exit 0). `read`, `search` and `index`
-  never write anything, store or no store (no lock file either).
-- **Writing to a missing store.** `write`, once its arguments have passed (III.2), creates
-  `<parent>/memory` and `<parent>/memory/notes` as needed (mode 0755, forced) before taking its
-  lock, and nothing else. On an empty store the only write that can succeed is a create under the
-  root (`--parent /`, III.6); a refused write still leaves the empty `memory/notes/` and its lock
-  file.
+- **A missing store is created empty** (CLI10, operator ruling 2026-11-19; it replaces CLI7's
+  "reading a missing store creates nothing"). Every verb, once its arguments have passed (III.2),
+  creates `<parent>/memory` and `<parent>/memory/notes` as needed (mode 0755, forced on what it
+  creates; a directory that already exists keeps its mode; another process creating it first is
+  fine), and nothing else: no node, and no lock file except `write`'s. Then it reports on the empty
+  store: `read` with no stem prints the root with no nodes and no tags; `read STEM` is the
+  unknown-stem error; `search` prints `matched="0"`; `index` prints the empty index (III.2); `lint`
+  prints `nodes="0" errors="0" warnings="0"`. Once `notes/` exists, `read`, `search`, `index` and
+  `lint` write nothing. On an empty store the only write that can succeed is a create under the root
+  (`--parent /`, III.6).
 - **Errors come first.** An argument error (III.2), a resolution error (above) or a missing or
   non-directory parent creates nothing. `memory/` or `memory/notes` existing as something other than
   a directory (including a dangling symlink) is an error naming that path
@@ -1855,7 +1855,7 @@ creates a node on its own (III.6).
 | `read` | `[STEM] [--block ID] [--depth N]` | D29's `memory_read`: the same result XML, and with no `STEM`, or `STEM` `/`, the root (III.6). `--depth` defaults to 1. |
 | `write` | `STEM [--parent P] [--description D] [--tag T]… [--property K=V]… [--add TEXT]… [--replace ID=TEXT]…` | D29's `memory_write`. `--parent /` is the root: a create under it makes a first-level node (III.6). `--add` and `--replace` are the blocks, in argv order. Any `--tag` replaces the node's tags with the given list. `--property` values are strings. |
 | `search` | `QUERY` | D31's search, with the same syntax and the same result XML. |
-| `index` | none | Prints `<memory_index>`, laid out and budgeted as in D30, or nothing when no node loads. |
+| `index` | none | Prints `<memory_index>`, laid out and budgeted as in D30. When no node loads (an empty store, or one whose every node is skipped) it prints the trust line and `<empty>No nodes yet.</empty>`, and no `<tags>` (CLI10; it printed nothing before). |
 | `lint` | `[--exit-zero]` | Loads the whole store and reports every problem the reader finds (D25), as `<memory_lint>` (III.7). Exit 0 when there are no errors, 2 when there are (0 regardless with `--exit-zero`). Writes nothing. |
 
 - **Argument errors name the argument as the user typed it** (`STEM`, `--parent`, `--add #2`,
@@ -1943,9 +1943,11 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
   `--parent-dir` exists. No tool file can produce it.
 - (CLI7) The model can add first-level nodes but no verb removes, moves or renames one, so a top
   level the model has sprawled is pruned by the operator, by hand.
-- (CLI7) A `write` refused on a missing store after its argument parsing (an unknown parent, an
-  invalid stem, an empty description or a bad tag, all checked by the writer) still leaves an empty
-  `memory/notes/` and its lock file. It reads as the same empty store.
+- (CLI7, CLI10) A `write` refused on a missing store after its argument parsing (an unknown
+  parent, an invalid stem, an empty description or a bad tag, all checked by the writer) still
+  leaves the empty `memory/notes/` (as every verb now does) and its lock file.
+- (CLI10) Every verb creates a missing store, so `memory read` in a fresh home directory leaves an
+  empty `~/memory/notes/`. The parent-must-exist rule still stops a mistyped parent.
 - (CLI7) The install guard `[ -e <state dir>/memory ]` treats a dangling `memory` symlink as no
   store, so `cp` writes through it; `memory` itself calls that symlink an error. Operator setups
   only.
@@ -2059,8 +2061,9 @@ skips what it cannot load (D25), and a skipped node silently disappears from `re
   discard a command's output when it exits non-zero — the agent's shell tools do
   (`internal/tools/shell_tools.go` in the agent repo), so a tool running plain `lint` would show the
   model `exit status 2` and never the report.
-- **A missing store** is empty (III.1): `nodes="0" errors="0" warnings="0"`, exit 0.
-- **It writes nothing** and creates nothing: no lock file, no store. It does not take the write
+- **A missing store** is created empty first (III.1): `nodes="0" errors="0" warnings="0"`, exit 0.
+- **It writes nothing** beyond creating a missing store's empty `memory/notes/` (III.1): no lock
+  file, no node. It does not take the write
   lock; every write replaces files by atomic rename, so a concurrent write is seen either before or
   after.
 - **Report only.** `lint` never repairs. It checks what the reader checks (D25), not what Obsidian
@@ -2115,7 +2118,7 @@ Superseded decisions keep their number; the row says what changed and why.
 | D27 | Encoding nodes | A pure encoder: crypto-random `m-` IDs unique store-wide; a fixed layout for new nodes; byte-identical output for an unchanged node; untouched blocks keep their exact lines; frontmatter changes re-emitted per D26 (tags replace, properties merge); BOM and line ending kept; validation before output; everything emitted reads back clean. §4.2 *Encoding nodes*. |
 | D28 | Writing to disk | An exclusive OS lock (`flock` on `notes/.write.lock`, bounded 10 s wait, then "busy — retry") serializes writes across processes; one writer per `notes/` per process; each write from a fresh full load; create vs update by stem existence (create: valid unused stem, description, a loaded parent, or the root `/` (CLI7); update: parent absent or matching); writes to skipped nodes refused; atomic temp-file-and-rename; refuse if the file changed on disk since it was read; read back through a full load and roll back on failure. §4.2 *Writing to disk*. |
 | D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: the guidance ships as `agent/prompt/memory_usage.md`, and since CLI7 nothing is seeded: a missing store is empty, and the starting tree ships as `agent/memory/notes/` (III.6); there is no `init`.)* |
-| D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. *(For the CLI, Part III supersedes the injection and the corrective error for a missing `notes/`: since CLI7 a missing `notes/` is an empty store, III.1.)* |
+| D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. *(For the CLI, Part III supersedes the injection and the corrective error for a missing `notes/`: since CLI7 a missing `notes/` is an empty store, III.1.)* *(CLI10: an index with no node prints the trust line and `<empty>No nodes yet.</empty>`, III.2.)* |
 | D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `read`, `write`, `search`, `index` and `lint` (CLI8, III.7); it seeds nothing, a missing store is empty, and no typology is built in (CLI7, III.6). The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1, 75 (retry) and, for `lint` only, 2 (errors found). There is no logging and no capability line. |
 | D31 | `memory_search` | Opt-in built-in (catalogued, never seeded, no generation bump); one `query` argument in an Obsidian syntax subset (words, phrases, `-`, `OR`, `tag:`, `path:`, `file:`, `[property:value]`, no parentheses); per-node matching, hit blocks, ranking by hits then recency; 20 nodes / 5 blocks; XML via `encoding/xml`; `memory.searched`. §4.5 *`memory_search`, exactly*. |
 
