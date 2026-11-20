@@ -99,32 +99,7 @@ func (w *Writer) deleteBlock(st *Store, n *Node, id string) (DeleteResult, error
 // next block (or, for the last block, from what came before it). Every
 // other byte is copied.
 func withoutBlock(n *Node, idx int) ([]byte, error) {
-	lines, bodyStart, runs, err := bodyLines(n)
-	if err != nil {
-		return nil, err
-	}
-	from, to := runs[idx].start, runs[idx].end
-	switch {
-	case idx+1 < len(runs):
-		to = runs[idx+1].start
-	case idx > 0:
-		from = runs[idx-1].end
-	default:
-		from = 0
-	}
-	out := strings.Join(lines[:bodyStart+from], "") + strings.Join(lines[bodyStart+to:], "")
-	if n.BOM {
-		out = bomText + out
-	}
-	want, err := expectationOf(n)
-	if err != nil {
-		return nil, err
-	}
-	want.blocks = append(want.blocks[:idx:idx], want.blocks[idx+1:]...)
-	if err := verifyOutput([]byte(out), want); err != nil {
-		return nil, fmt.Errorf("node %s: %w", n.Stem, err)
-	}
-	return []byte(out), nil
+	return rewritten(n, noteChange{drop: idx})
 }
 
 // brokenLinks lists the links a delete broke: every edge, in a block of a

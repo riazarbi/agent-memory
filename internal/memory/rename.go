@@ -7,7 +7,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 )
 
 // RenameResult is a successful rename (Part III.8 "rename, exactly"): the
@@ -100,8 +99,9 @@ type renaming struct {
 }
 
 // refusal checks what a rename cannot do: take the node's own stem, a
-// loaded node's, or the name of an entry that is already there, beside the
-// node's folder or (as NEW.md) inside it.
+// loaded node's, the name of any folder in the tree (exactly, or up to
+// letter case: what write refuses to create), or the name of an entry that
+// is already there, beside the node's folder or (as NEW.md) inside it.
 func (rn renaming) refusal(st *Store) error {
 	n, new := rn.node, rn.new
 	if new == n.Stem {
@@ -109,6 +109,17 @@ func (rn renaming) refusal(st *Store) error {
 	}
 	if other, taken := st.Node(new); taken {
 		return fieldErr("new", "stem %q is in use by the node at %s; stems are unique store-wide - choose another", new, other.Path)
+	}
+	// As strictly as write checks a stem it creates (D28): any folder in
+	// the tree, loaded or not, and a name differing only by case. The
+	// walk compares names, so it does not depend on how the filesystem
+	// treats case.
+	exact, folded := rn.w.findFolders(new)
+	if exact != "" {
+		return fieldErr("new", "stem %q is taken by the folder %s, which the reader skipped (%s); fix or remove that folder first, or choose another stem", new, exact, problemFor(st, exact))
+	}
+	if folded != "" {
+		return fieldErr("new", "%q differs only by letter case from the folder %s; stems are unique store-wide and a case-insensitive filesystem cannot hold both - choose another stem", new, folded)
 	}
 	if _, err := os.Lstat(rn.newFolder()); err == nil {
 		return fieldErr("new", "an entry named %q is already there beside the node's folder, and it is not a loaded node; move or remove it first, or choose another stem", new)
@@ -178,16 +189,23 @@ func relinkEdits(st *Store, old, new string) ([]noteEdit, int, error) {
 
 // relinkCuts returns the changes that retarget a block's links to the node
 // old: for each edge the link scanner finds to it, node link or block
-// link, the stem is replaced by new. A link's target begins right after
-// its "[[", so the alias and the block ID are not touched; a [[…]] in
-// inline code or in an unsupported form is no edge and is left alone.
+// link, the stem is replaced by new.
 func relinkCuts(text, old, new string) []cut {
+	return retargetCuts(text, new, func(e Edge) bool { return e.Stem == old })
+}
+
+// retargetCuts returns the changes that give the stem new to every edge
+// in a block's text that match picks. The edges are the link scanner's: a
+// [[…]] in inline code or in an unsupported form is no edge and is left
+// alone. A link's target begins right after its "[[", so only the stem is
+// replaced: the alias and the block ID are not touched.
+func retargetCuts(text, new string, match func(Edge) bool) []cut {
 	spans, _ := scanLinkSpans(text)
 	var cuts []cut
 	for _, s := range spans {
-		if s.edge.Stem == old {
+		if match(s.edge) {
 			at := s.start + len(linkOpen)
-			cuts = append(cuts, cut{start: at, end: at + len(old), repl: new})
+			cuts = append(cuts, cut{start: at, end: at + len(s.edge.Stem), repl: new})
 		}
 	}
 	return cuts
@@ -207,28 +225,9 @@ func relinked(n *Node, old, new string) ([]byte, int, error) {
 	if count == 0 {
 		return nil, 0, nil
 	}
-	lines, bodyStart, runs, err := bodyLines(n)
+	out, err := rewritten(n, noteChange{cuts: blockCuts, drop: noBlock})
 	if err != nil {
 		return nil, 0, err
 	}
-	want, err := expectationOf(n)
-	if err != nil {
-		return nil, 0, err
-	}
-	body := append([]string(nil), lines[bodyStart:]...)
-	for i, b := range n.Blocks {
-		if len(blockCuts[i]) == 0 {
-			continue
-		}
-		cutBlock(body, runs[i], b, blockCuts[i])
-		want.blocks[i].Text = applyCuts(b.Text, blockCuts[i])
-	}
-	out := strings.Join(lines[:bodyStart], "") + strings.Join(body, "")
-	if n.BOM {
-		out = bomText + out
-	}
-	if err := verifyOutput([]byte(out), want); err != nil {
-		return nil, 0, fmt.Errorf("node %s: %w", n.Stem, err)
-	}
-	return []byte(out), count, nil
+	return out, count, nil
 }

@@ -3,6 +3,93 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-20 - A single block can change node: `move-block` moves it with its ID and rewrites every link to it, and `rename` refuses a new stem that `write` would refuse to create
+
+CLI13, the third restructuring unit (spec III.8, "`move-block`, exactly", and the paragraph of
+"`rename`, exactly" that begins "`NEW` is checked as strictly as `write` checks a new stem").
+`split` and `merge` are not built (CLI14), and no tool file, skill or prompt text ships for the
+restructuring verbs yet (CLI15): `agent/` is byte-for-byte unchanged, so no agent can call them
+until then. This is the second build of the unit (the doing file's "Rework 1"): the target note is
+appended to by byte surgery, not through `write`'s encoder.
+
+- `internal/memory/moveblock.go` (new): `Writer.MoveBlock(id, to)`. Under the write lock and from
+  a fresh load it finds the one block carrying the ID, works out every note that changes, replaces
+  them (`replaceAll`), reloads, and checks the store with `unsound`. Three kinds of edit, and one
+  note can need two of them in the same replace: the old note loses the block (and has its other
+  links to the block retargeted), the target gains it (and has its own links retargeted), and
+  every other note holding a link to the block has that link retargeted. The moved block's links
+  to itself are rewritten in its text as it moves, and counted. Only edges whose stem is the old
+  node *and* whose block is the ID are touched: `[[old]]` stays, a `[[to#^ID]]` that dangled
+  before now resolves uncounted, and `[[other#^ID]]` is left dangling. Refusals, in the spec's
+  order, each a `FieldError` naming `id` or `to` (or a `NoNodeError` for an unknown target): the
+  root as target (before the lock is taken, so nothing is created), no block with the ID, the ID
+  on more than one block (across nodes or twice in one), the target unknown, the block already
+  there. The trap: the "more than one block" check must come from a scan of every loaded block,
+  not from `Store.Block`, which answers with the first holder and would silently move it.
+  Decided where the spec is silent: an empty ID is refused naming `id` before the lock; the
+  duplicate-ID message lists the nodes that hold it.
+- `internal/memory/restructure.go`: `rewritten` and `noteChange` (new) are the one place a
+  restructuring call edits a note by byte surgery: per-block cuts on link targets, one block
+  removed, one block appended, then the output is loaded through the folder-note parser
+  (`verifyOutput`) before anything is written. It is the bodies of `withoutBlock` (`delete
+  --block`) and `relinked` (`rename`) lifted into one function; both now call it, with no
+  behaviour change (their tests pass unchanged). `dropRange` is `withoutBlock`'s line arithmetic,
+  lifted. `keptBytes` is the "replaced note holds other bytes at the reload" loop of
+  `replaceNotes`, lifted so `MoveBlock` uses the same check and the same `ErrChangedOnDisk`
+  wording. Rejected: giving `MoveBlock` its own copy of the removal and relinking code (a second
+  rule for what a removed block takes with it).
+- `internal/memory/restructure.go`, `withLastBlock` (new): how the block is appended. The note's
+  bytes are kept; its last line gets a line ending if it had none; one blank line is added; then
+  the text, a space, `^ID` and one line ending, all in the note's own line ending (the opening
+  delimiter line's, as the encoder uses). So an ID-less hand-written paragraph in the target is
+  not given an ID, a run of blank lines is not collapsed, a CRLF note stays CRLF and a byte-order
+  mark stays. This is deliberately not `write --add`'s encoder, which does adopt and collapse:
+  that was the first build's defect. Decided where the spec is silent or pulls two ways: a target
+  that already ends in one or more blank lines keeps them and gets none added ("every byte stays"
+  wins over "exactly one blank line", which then means at least one); a target with no blocks gets
+  the frontmatter, one blank line and the block, dropping any blank lines that followed the
+  frontmatter, because the spec says such a note is "laid out as `write` lays out a first block";
+  a block whose ID was written on a line of its own arrives as text, space, `^ID` (the spec's
+  form), and a block that is only an ID arrives as `^ID` alone, since a leading space before it
+  would be a stray byte. The moved text keeps the reader warnings it already had (an unsupported
+  `[[x#Heading]]`, an embed): they are added to what `verifyOutput` allows for the target,
+  otherwise such a block could never be moved.
+- `internal/memory/rename.go`: `refusal` now also calls `findFolders`, the walk `write`'s create
+  check uses, so `NEW` is refused when any folder in the tree carries it, loaded or not (the
+  message quotes the reader's reason for skipping it, as `write`'s does), and when it differs from
+  a folder's name only by letter case. No second collision rule: it is the same walk, comparing
+  names, so the case check does not depend on the filesystem. It runs after the own-stem and
+  loaded-stem checks and before the two `Lstat` checks, so on a case-insensitive filesystem a
+  case-different folder beside the node is reported as a case collision, not as "an entry already
+  there". `write`'s own messages are untouched; `rename`'s are worded for `NEW`. `retargetCuts`
+  (new) is `relinkCuts` with the edge test as a parameter, so `move-block` matches on stem and
+  block ID with the same scanner positions; `relinkCuts` calls it, unchanged in behaviour.
+- `internal/memory/delete.go`: `withoutBlock` is now one call of `rewritten`. No behaviour change.
+- `cmd/memory/moveblock.go` (new), `main.go`: the verb `move-block ID --to STEM`, its result
+  `<memory_move_block id from stem links_rewritten>`, and its errors: `ID:` or the flag as typed
+  (`--to`, `-to`), an unknown `--to` with near matches, a surplus argument quoted as `rename`
+  quotes one. Missing arguments, an empty `--to` and `--to /` fail before the store is created.
+  `ID` is passed as typed (`^m-…` with a caret is an unknown ID, as in `read` and `delete`). The
+  usage text and the package comment list the verb and `rename`'s stricter check. The trap in the
+  usage text: `TestUsageListsMoveAndRename` (CLI12) pins the sentence "write, delete, retag, move
+  and rename take the store's write lock", so the verb is added after it ("and so does
+  move-block") rather than inside the list; the test is unchanged.
+- `README.md`: the Usage section gains the `move-block` command line, a paragraph on what it
+  does, refuses and prints, and the stricter `rename` check; the status line, the lock and
+  retry sentences and the root paragraph list the verb.
+- Tests: `internal/memory/move_block_test.go` (new) covers the bytes of both notes (line endings,
+  byte-order mark, missing final newline, blank-line runs, ID-less paragraphs, an empty target),
+  link counting, the refusals and their order, a failure injected at each note replacement and at
+  the reload, an outside edit (`ErrChangedOnDisk`), the lock, and `rename`'s new checks.
+  `cmd/memory/move_block_bin_test.go` and `move_block_busy_bin_test.go` (new) run the unit's eight
+  acceptance criteria through the built binary on the fixture store the unit describes.
+- Docs and agent files checked: `docs/spec/agent-memory.md` III.8 already holds "`move-block`,
+  exactly" and the `rename` ruling (committed with the unit's lock; not edited here).
+  `agent/README.md`, `agent/tools/*.json`, `agent/prompt/memory_usage.md`,
+  `agent/livecontext/memory_index.json` and `agent/memory/notes/` are deliberately unchanged:
+  they are CLI15's, and `agent/README.md` still says no verb moves, renames or deletes a node
+  until then (a recorded gap, III.8). No new dependency.
+
 ## 2026-11-20 - A node can change place and name: `move` relocates it with its subtree, and `rename` gives it a new stem and rewrites every link to it
 
 CLI12, the second restructuring unit (spec III.8, "`move`, exactly" and "`rename`, exactly").
