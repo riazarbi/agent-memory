@@ -1843,7 +1843,7 @@ creates a node on its own (III.6).
   "reading a missing store creates nothing"). Every verb, once its arguments have passed (III.2),
   creates `<parent>/memory` and `<parent>/memory/notes` as needed (mode 0755, forced on what it
   creates; a directory that already exists keeps its mode; another process creating it first is
-  fine), and nothing else: no node, and no lock file except the one a writing verb takes (`write`, and since CLI11 `delete` and `retag`, III.8). Then it reports on the empty
+  fine), and nothing else: no node, and no lock file except the one a writing verb takes (`write`, and the restructuring verbs as they are built, III.8: `delete`, `retag`, `move`, `rename`). Then it reports on the empty
   store: `read` with no stem prints the root with no nodes and no tags; `read STEM` is the
   unknown-stem error; `search` prints `matched="0"`; `index` prints the empty index (III.2); `lint`
   prints `nodes="0" errors="0" warnings="0"`. Once `notes/` exists, `read`, `search`, `index` and
@@ -2191,7 +2191,15 @@ exactly as it was.
     the node are not written and keep their mtime.
   - `links_rewritten` counts links, not blocks or notes.
   - Refused, exit 1: `NEW` is not valid stem syntax (D25); `NEW` is a loaded node's stem, `STEM`
-    itself included; an entry named `NEW` already exists beside the node's folder.
+    itself included; an entry named `NEW` already exists beside the node's folder; a file
+    `NEW.md` already exists inside it.
+  - **`NEW` is checked as strictly as `write` checks a new stem** (ruled at CLI12's banking;
+    built in CLI13): it is also refused when any folder in the tree already carries it, loaded
+    or not, and when it differs from such a folder's name only by case (D28's create rules).
+    `split`'s `NEW` follows the same rule. CLI12 as built checks loaded stems and the entry
+    beside the folder only.
+  - Argument checks run in this order: `NEW`'s syntax (before the store is created), `STEM`
+    unknown, then the collisions. `rename a b c` names the surplus argument, `"c"`.
   - A link `[[NEW]]` that was dangling before the call resolves to the renamed node afterwards.
     It is not counted in `links_rewritten`, because it is not rewritten.
   - The description, tags and properties are not changed.
@@ -2240,17 +2248,40 @@ exactly as it was.
   - A node whose folder is a symlink: `delete` removes the link, not its target. Untested.
   - Until CLI15, `agent/README.md` and the shipped tool descriptions still say nothing can be
     deleted or cleared.
+- **Known gaps, recorded not fixed** (CLI12 acceptance, 2026-11-20):
+  - `rename` replaces the linking notes, then renames the folder note and the folder. A crash in
+    between leaves links pointing at `NEW` while the node is still `STEM`: dangling-link
+    warnings in `lint`, repaired by running the rename again by hand or renaming the folder.
+  - If another writer changes a note between `rename` replacing it and the final reload, D28's
+    rule wins over "all or nothing": the call exits 75 and does not roll back over the other
+    writer's bytes. The rename is then complete on disk and the retry fails with an unknown
+    `STEM`.
+  - A rolled-back `rename` restores bytes and names, not mtimes: notes that were replaced and
+    restored carry new mtimes.
+  - `move` makes no "changed on disk" check, because it writes no note. `rename` checks only the
+    notes it rewrites.
+  - `rename` rewrites and counts a link to a block that does not exist (`[[STEM#^missing]]`), so
+    its lint warning is reworded. A note that did not load is not rewritten; if it loads later,
+    its links to the old stem dangle.
+  - A move onto another device (a bound subtree) fails with the OS error and changes nothing. A
+    node whose folder is a symlink has the link moved or renamed, not its target. Untested.
 - **Deleting does not rewrite links.** `delete` reports the links it leaves dangling, and `lint`
   reports them afterwards as warnings (III.7). The caller repairs them with `write --replace`.
   Rejected: refusing to delete a linked node (a dream could not remove a contradicted claim that
   other notes cite), and rewriting or stripping the links (the verb would be editing prose).
 - **Postcondition, for every verb:** the store has no lint error it did not have before, and the
-  only warnings a verb may add are `delete`'s dangling links. A verb acts only on nodes that
+  only warnings a verb may add are `delete`'s dangling links. **An error is the same error when
+  it is the same skipped folder** (ruled at CLI12's banking, 2026-11-20): a folder that did not
+  load before the call and does not load after it is not new, wherever the call has moved or
+  renamed it to and however the reason now reads (reasons quote paths and stems that the call
+  changes). So an unloaded folder carried along by `move`, `rename`, `merge` or `split` never
+  causes a roll back. The node the call acted on must itself load afterwards. A verb acts only on nodes that
   loaded; a node `lint` reports as an error is invisible to it and is the operator's to fix.
   `move`, `delete --recursive` and `merge` carry along whatever else is inside the folders they
   move or remove, unloaded nodes and stray files included.
 - **Results.** XML on stdout, exit 0, rendered with `encoding/xml` like
-  the other results. One element per verb, saying what changed so the caller need not re-read.
+  the other results. An element with no children prints as `<memory_move …></memory_move>`:
+  `encoding/xml` never emits the self-closing form the examples below use for brevity. One element per verb, saying what changed so the caller need not re-read.
   Counts are always present, zero included. `links_rewritten` counts links, not blocks.
   ```xml
   <memory_move stem="atlas-cutover" from="people" parent="projects" path="projects/atlas-cutover"/>
