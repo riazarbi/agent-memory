@@ -8,7 +8,11 @@
 // one line on stderr with exit 1, or exit 75 when retrying can succeed
 // (busy, changed on disk). lint alone exits 2,
 // its report on stdout, when the store has errors, unless given
-// --exit-zero (Part III.7). It never logs.
+// --exit-zero (Part III.7). delete and retag are the restructuring verbs
+// built so far (Part III.8): delete removes a block, a node, or with
+// --recursive a node and everything under it, and reports the links it
+// left dangling; retag renames or removes a tag across the store. It never
+// logs.
 package main
 
 import (
@@ -58,6 +62,18 @@ verbs:
                                         warnings, 2 when there are errors;
                                         with --exit-zero, the same report
                                         and exit 0 even with errors
+  delete STEM [--block ID] [--recursive]
+                                        delete one block (--block), or the
+                                        node; a node whose folder holds
+                                        children or other files is refused
+                                        unless --recursive, which deletes
+                                        everything under it; links to what
+                                        was deleted are not rewritten: each
+                                        is listed as <dangling>
+  retag OLD [NEW]                       rename tag OLD to NEW on every node,
+                                        in frontmatter tags and inline
+                                        #tags, nested tags (OLD/...) with
+                                        it; with no NEW, remove OLD
 
 The store is <parent>/memory. The parent is --parent-dir DIR (or
 --parent-dir=DIR), given before the verb; else MEMORY_PARENT_DIR from the
@@ -66,7 +82,8 @@ directory. An empty --parent-dir, or a variable set but empty, is an error.
 After the verb, --parent-dir is not an option. The parent must already
 exist. A missing store is an empty one: every verb, once its arguments
 pass, creates memory/ and memory/notes/ when they are missing, and nothing
-else.
+else. write, delete and retag take the store's write lock; exit code 75
+means busy or changed on disk: make the same call again.
 `
 
 // verb runs one verb's arguments against the store at loc and returns its
@@ -80,6 +97,8 @@ func verbs() map[string]verb {
 		"search": searchVerb,
 		"index":  indexVerb,
 		"lint":   lintVerb,
+		"delete": deleteVerb,
+		"retag":  retagVerb,
 	}
 }
 

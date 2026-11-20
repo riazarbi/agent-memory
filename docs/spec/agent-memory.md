@@ -1843,7 +1843,7 @@ creates a node on its own (III.6).
   "reading a missing store creates nothing"). Every verb, once its arguments have passed (III.2),
   creates `<parent>/memory` and `<parent>/memory/notes` as needed (mode 0755, forced on what it
   creates; a directory that already exists keeps its mode; another process creating it first is
-  fine), and nothing else: no node, and no lock file except `write`'s. Then it reports on the empty
+  fine), and nothing else: no node, and no lock file except the one a writing verb takes (`write`, and since CLI11 `delete` and `retag`, III.8). Then it reports on the empty
   store: `read` with no stem prints the root with no nodes and no tags; `read STEM` is the
   unknown-stem error; `search` prints `matched="0"`; `index` prints the empty index (III.2); `lint`
   prints `nodes="0" errors="0" warnings="0"`. Once `notes/` exists, `read`, `search`, `index` and
@@ -2156,31 +2156,62 @@ exactly as it was.
     the caller could not see. Dot-entries (`.DS_Store`, a leftover temporary file) are not
     content: they do not cause a refusal and go with the folder.
   - `delete STEM --recursive` removes the folder and everything in it, loaded or not.
-  - The folder is first renamed to a hidden name beside itself (a dot-entry, ignored by the
-    reader and by Obsidian) and then removed, so a failure part-way never leaves half a node
+  - The folder is first renamed to a hidden name beside itself (`.<stem>.deleting`, a dot-entry,
+    ignored by the reader and by Obsidian), so a failure part-way never leaves half a node
     visible. The store is then reloaded: if it has an error it did not have before, the folder
-    is renamed back and the call fails.
+    is renamed back and the call fails. Only then is the hidden folder removed. *(Corrected at
+    CLI11's banking: the first wording removed the folder before the reload, which cannot be
+    undone.)*
+  - With both children and other entries in the way, the refusal names both:
+    `has 2 children and its folder also holds "zz.txt"`.
   - `<dangling>` lists every link, in a block of a node that still exists, whose target was a
     deleted node or a block of one (or, for a block delete, that block, including links from
     other blocks of the same node). Order: by holding node's stem, then that node's block order,
     then the link's position in the block. A link that was already dangling before the call is
-    not listed.
+    not listed. The same link written twice in a block is listed twice. A holding paragraph
+    that has no ID yet has no `block` attribute.
 - **`retag`, exactly** (CLI11; operator rulings 2026-11-20).
   - It changes both places a tag lives: a node's frontmatter `tags`, and inline `#tag` words in
-    block text, found exactly as `search` finds them (D31: `#` at the start of the text or after
+    block text, located as `search` locates them (D31: `#` at the start of the text or after
     whitespace, then the longest run of tag characters that is a valid tag; inline code is not
     special). Only the tag token is rewritten; every other byte of the block stays.
+  - **Matching is exact, case included** (operator ruling at CLI11's banking). `retag misc`
+    leaves `Misc` and `#MISC` alone, although `search tag:misc` folds case and finds them. The
+    index lists `Misc` and `misc` as two tags, and `retag Misc misc` is how they are folded
+    into one.
   - Nested tags go with their parent: `retag project proj` turns `project/atlas` into
     `proj/atlas`, and `retag project` removes `project` and every `project/…` tag. Matching is on
     whole path segments, so `projects` is not touched by `retag project`.
   - Removing an inline tag removes the `#tag` token and one adjacent space, so no double space is
-    left. A block that would be left with no text is not rewritten: the call fails naming the
-    block, and nothing is written (delete the block instead).
+    left: the space before it; the space after it when the tag starts the text or a line; its
+    line break when it is alone on a line. A block that would be left with no text, with a blank
+    line inside it, or with a line that now starts with a list, quote or heading marker is not
+    rewritten: the call fails naming the block, and nothing is written (delete the block, or
+    reword it, instead).
   - A node that ends with the same tag twice in its frontmatter keeps it once, at the first
     position.
   - `OLD` and `NEW` are given with or without a leading `#` and must be valid tags (D17); `NEW`
     equal to `OLD` writes nothing, `nodes="0"`.
   - `nodes` in the result counts the nodes whose file changed. Only those files are written.
+- **Known gaps, recorded not fixed** (CLI11 acceptance, 2026-11-20):
+  - If the hidden folder cannot be removed after the reload passed (a permissions fault inside
+    the store), `delete` exits 1 naming the leftover `.<stem>.deleting`; the node is already
+    gone and the dangling links are not reported. This is the one case where a failed call does
+    not leave the store as it was. `lint` then lists the newly dangling links.
+  - A crash between the rename and the removal leaves `.<stem>.deleting` behind. Nothing removes
+    it and `lint` does not see it (dot-entries are ignored); the operator deletes it by hand.
+  - Deleting a block can reword another node's "block ID … is also used in …" warning, so
+    "the only warnings a verb may add" holds for errors store-wide and is not checked for
+    reworded warnings.
+  - A `retag` that changes a node's frontmatter re-emits it (D26): a hand-formatted tag list may
+    change layout, `tags: foo` becomes a list, and removing the last tag leaves `tags: []`.
+  - `/`, `a/` and `a//b` are valid tags to the library (D17 as implemented), so `retag /` is a
+    tag nobody has, not an error.
+  - `--block` is not normalised: `^m-…` with Obsidian's caret is an unknown ID, in `delete` as
+    in `read`.
+  - A node whose folder is a symlink: `delete` removes the link, not its target. Untested.
+  - Until CLI15, `agent/README.md` and the shipped tool descriptions still say nothing can be
+    deleted or cleared.
 - **Deleting does not rewrite links.** `delete` reports the links it leaves dangling, and `lint`
   reports them afterwards as warnings (III.7). The caller repairs them with `write --replace`.
   Rejected: refusing to delete a linked node (a dream could not remove a contradicted claim that

@@ -3,6 +3,80 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-20 - Memory can lose things: `delete` removes a block, a node or a subtree and reports the links it broke, and `retag` renames or removes a tag store-wide
+
+CLI11, the first of the restructuring verbs (spec III.8). `move`, `rename`, `move-block`, `split`
+and `merge` are not built (CLI12-CLI14), and no tool file, skill or prompt text ships for these
+verbs yet (CLI15): `agent/` is byte-for-byte unchanged, so no agent can call them until then.
+
+- `internal/memory/restructure.go` (new): what the restructuring calls share. `locked` takes the
+  write lock and loads fresh; `replaceNotes` replaces several folder notes atomically (the
+  existing `commit`, with its edit-race check), reloads, and restores every note already replaced
+  if a replace fails or the reload shows an error the store did not have (`newErrors`, a multiset
+  diff of error-severity problems: III.8's postcondition). A note found holding other bytes at the
+  reload is `ErrChangedOnDisk` and is not rolled back over (D28). `NoNodeError` carries the loaded
+  stems so the CLI can list near matches without a second, unlocked load. The check is on errors
+  only, not warnings: deleting a block can legitimately reword another node's "block ID also used
+  in" warning, so a warnings diff would roll back good deletes.
+- `internal/memory/delete.go` (new): `Writer.Delete`. A block delete is byte surgery on the source
+  lines (the block's lines plus the blank lines up to the next block, or, for the last block, back
+  to the previous one), not a pass through the encoder: the encoder would also give IDs to ID-less
+  operator paragraphs and collapse blank-line runs, and the rule is "changes nothing else". The
+  result is still loaded through the folder-note parser (`verifyOutput`) before it is written. A
+  node delete refuses, without `--recursive`, a folder holding anything but the folder note and
+  dot-entries, judged from the directory listing, not from the loaded children, so a folder that
+  failed to load or a stray file blocks it too. The folder is renamed to `.<stem>.deleting`
+  beside itself, the store reloaded and checked, and only then removed. Trap: the spec's sentence
+  order reads "renamed, then removed, then reloaded, then renamed back on error", which cannot be
+  done; the reload comes before the removal. Every loaded note in the subtree is compared with
+  the bytes read before the rename (the edit-race check). `Dangling` is every link in a surviving
+  block that resolved before and does not resolve after, so links from inside the deleted
+  subtree, links already dangling, and links a duplicated block ID's second holder still answers
+  are left out without special cases. Not done: if removing the hidden folder fails after the
+  check passed, the node is gone from the store and the call returns an error naming the
+  leftover; it is not renamed back, because it may be half removed.
+- `internal/memory/retag.go` (new): `Writer.Retag` and `CleanTag`. Every note is worked out
+  before any is written, so a block that would be left empty fails the call with nothing
+  changed. Block text is edited in the block's source lines (text offsets map to source offsets
+  line by line), so line endings, the way the ID is written and ID-less paragraphs stay as they
+  were; the frontmatter tag list goes through the existing `rewriteFrontmatter` (D26), so a
+  changed list is re-emitted as any tag change is, and an unchanged one is copied. Removing an
+  inline tag takes the space before it, or, when the tag starts the text or a line, the space
+  after it; a tag alone on a line goes with its line break (leaving a blank line would split the
+  block in two). A removal that would leave a blank line or expose a list, quote or heading
+  marker is refused, naming the block. Decided where the spec is silent: matching is
+  case-sensitive (search folds case, but the index counts `Misc` and `misc` as two tags);
+  duplicates are collapsed only in a tag list the retag touches; `NEW` equal to `OLD` returns
+  before taking the lock.
+- `internal/memory/links.go`, `search.go`: `scanLinks` and `inlineTags` are now thin wrappers over
+  `scanLinkSpans` and `inlineTagSpans`, which also say where each link or tag is written. That is
+  how `delete` reports a link "as written" (alias included) and `retag` rewrites only the tag
+  token, without a second parser. Both wrappers still return nil for no matches, which existing
+  tests compare against.
+- `cmd/memory/delete.go`, `retag.go` (new), `main.go`, `read.go`: the verbs, their results
+  (`<memory_delete>` with `<dangling>`, `<memory_retag>`, via `encoding/xml`), the usage text and
+  the package comment. Argument errors come before the store is created and name the argument as
+  typed: `STEM`, `--block`, `--recursive`, `OLD`, `NEW`. `delete /` is refused naming `STEM`. A
+  `<dangling>` whose holding block has no ID has no `block` attribute. `read`'s unknown-stem
+  message was split so `delete` gives the same line, near matches included.
+- `README.md`: the status line lists both verbs; the Usage section has examples and a paragraph
+  for each, with the result XML. "No verb ... deletes a node" and "no lock file except `write`'s"
+  are corrected (a refused `delete` or `retag` on a missing store leaves the empty store and its
+  lock file, as a refused `write` does), and exit 75 names all three writing verbs.
+- Tests: `cmd/memory/restructure_bin_test.go` and `restructure_busy_bin_test.go` run the unit's
+  eight acceptance criteria through the built binary on the fixture store made with `write`;
+  every successful call is also checked to add no lint error. `internal/memory/delete_test.go`
+  and `retag_test.go` cover the byte-level rules (CRLF, byte-order mark, ID on its own line,
+  ID-less paragraphs), the roll backs (a failed rename, a new error at the reload, a note edited
+  under the call) and the lock.
+- Docs and agent files checked: `docs/spec/agent-memory.md` III.8 already describes both verbs
+  and was not edited. `agent/` is unchanged by design (CLI15 ships the tool files and skills), so
+  `agent/README.md`, the tool descriptions and the guidance still describe only the five earlier
+  verbs, and `memory_write.json`'s "Tags cannot be cleared and blocks cannot be deleted" stays
+  true of `write`. Spec III.1 still says "no lock file except `write`'s"; the README has the
+  current rule.
+- No new dependency. The library still does not log.
+
 ## 2026-11-19 - The README no longer links to a design transcript that is not in the repo
 
 - `README.md`: dropped "The conversation that produced it is in `docs/research/`". That folder is

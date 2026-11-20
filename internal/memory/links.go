@@ -14,12 +14,32 @@ const (
 
 var linkBlockIDRE = regexp.MustCompile(`^m-[a-z0-9]{6}$`)
 
+// linkSpan is one edge as written: text[start:end] is its [[…]].
+type linkSpan struct {
+	edge       Edge
+	start, end int
+}
+
 // scanLinks finds the edges in a block's text, in order, skipping inline
 // code spans. Other [[…]] forms and every embed stay plain text and give
 // one warning per occurrence.
 func scanLinks(text string) ([]Edge, []string) {
+	spans, warnings := scanLinkSpans(text)
+	if len(spans) == 0 {
+		return nil, warnings
+	}
+	edges := make([]Edge, 0, len(spans))
+	for _, s := range spans {
+		edges = append(edges, s.edge)
+	}
+	return edges, warnings
+}
+
+// scanLinkSpans is the link scanner: scanLinks' edges, each with where it
+// is written in text.
+func scanLinkSpans(text string) ([]linkSpan, []string) {
 	var (
-		edges    []Edge
+		spans    []linkSpan
 		warnings []string
 	)
 	for i := 0; i < len(text); {
@@ -36,7 +56,7 @@ func scanLinks(text string) ([]Edge, []string) {
 			inner, next, ok := wikiInner(text, i+len(linkOpen))
 			if ok {
 				if e, valid := parseLink(inner); valid {
-					edges = append(edges, e)
+					spans = append(spans, linkSpan{edge: e, start: i, end: next})
 				} else {
 					warnings = append(warnings, fmt.Sprintf("link [[%s]] is not a supported form ([[stem]], [[stem|alias]], [[stem#^m-xxxxxx]]); kept as plain text", inner))
 				}
@@ -46,7 +66,7 @@ func scanLinks(text string) ([]Edge, []string) {
 			i++
 		}
 	}
-	return edges, warnings
+	return spans, warnings
 }
 
 // wikiInner returns the text between an opening [[ (ending at from) and

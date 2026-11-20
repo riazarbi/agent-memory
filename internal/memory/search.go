@@ -236,7 +236,27 @@ func foldText(s string) string {
 // characters, kept when that run is a valid tag (not empty, not only
 // digits).
 func inlineTags(text string) []string {
-	var out []string
+	spans := inlineTagSpans(text)
+	if len(spans) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(spans))
+	for _, s := range spans {
+		out = append(out, s.tag)
+	}
+	return out
+}
+
+// tagSpan is one inline tag as written: text[start:end] is its #tag.
+type tagSpan struct {
+	tag        string
+	start, end int
+}
+
+// inlineTagSpans is the inline-tag scanner: inlineTags' tags, each with
+// where it is written in text.
+func inlineTagSpans(text string) []tagSpan {
+	var out []tagSpan
 	prevSpace := true
 	for i := 0; i < len(text); {
 		r, size := utf8.DecodeRuneInString(text[i:])
@@ -250,7 +270,7 @@ func inlineTags(text string) []string {
 				end += ts
 			}
 			if t, err := tag(text[i+size : end]); err == nil && end > i+size {
-				out = append(out, t)
+				out = append(out, tagSpan{tag: t, start: i, end: end})
 			}
 		}
 		prevSpace = unicode.IsSpace(r)

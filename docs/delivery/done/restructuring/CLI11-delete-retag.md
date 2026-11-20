@@ -134,3 +134,24 @@ Local only: Go toolchain, temp dirs. No network, no live agent.
 - `cmd/memory/retry_bin_test.go` shows how the existing tests hold the lock from another process.
 - The library does not log, and takes no new dependency.
 - Results are rendered with `encoding/xml`, like the other verbs'.
+
+## Post-verification notes (2026-11-20)
+- Built in one pass. Production: `internal/memory/restructure.go`, `delete.go`, `retag.go` (new);
+  `links.go` and `search.go` gained position-returning scanners that the old ones wrap;
+  `cmd/memory/delete.go`, `retag.go` (new), `main.go`, `read.go`. Tests:
+  `internal/memory/delete_test.go`, `retag_test.go`, `cmd/memory/restructure_bin_test.go`,
+  `restructure_busy_bin_test.go`. No existing test, document or `agent/` file was touched
+  (confirmed with `git diff`).
+- Verifier: all eight criteria PASS through the real binary; 20 of 20 mutants killed; 9 of 9
+  inverted assertions failed; scope clean; the gate green, with the busy test waiting the real 10 s.
+- Operator rulings at banking: `retag` matching is exact, case included; a failed removal of the
+  renamed-aside folder is a recorded known gap, not a rework.
+- Spec corrected at banking (III.8, III.1): the delete order (rename, reload, then remove; the
+  locked wording removed first, which cannot be rolled back); the lock file is taken by `delete`
+  and `retag` too; which space goes with a removed inline tag and the refusals that protect the
+  paragraph; the refusal wording with both children and stray entries; `<dangling>` for a
+  paragraph with no ID and for a repeated link; the known gaps listed in III.8.
+- Criterion 6 could not tell case-sensitive from case-folding matching (the fixture is all lower
+  case); the ruling is now in the spec and a library test pins it.
+- Block deletion is byte surgery on the note, not a pass through the encoder, because the encoder
+  would also adopt ID-less paragraphs and collapse blank lines.
