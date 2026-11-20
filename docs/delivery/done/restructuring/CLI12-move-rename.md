@@ -124,3 +124,27 @@ Local only: Go toolchain, temp dirs. No network, no live agent.
   note. Do not write a second link parser.
 - `cmd/memory/restructure_busy_bin_test.go` shows how the lock is held from another process.
 - The library does not log, and takes no new dependency.
+
+## Post-verification notes (2026-11-20)
+- Built in one pass. Production: `internal/memory/move.go`, `rename.go` (new); `restructure.go`
+  (`replaceNotes` split into `replaceAll` plus the rest, so `rename` can restore notes after a
+  later step fails); `retag.go` (`cutBlock` lifted out, shared with `rename`);
+  `cmd/memory/move.go`, `rename.go` (new), `main.go`, `read.go` (`unknownNodeAmong`, so an unknown
+  `--parent` reads like an unknown `STEM`). Tests: `internal/memory/move_rename_test.go`,
+  `cmd/memory/move_rename_bin_test.go`, `move_rename_busy_bin_test.go`. No existing test,
+  document or `agent/` file was touched (confirmed with `git diff`).
+- The edits to `retag.go` and `read.go` are outside the letter of "no change to `read` or
+  `retag`". Reviewed by the delivery lead: each lifts existing lines into a shared function,
+  with no behaviour change; accepted.
+- Verifier: all eight criteria PASS through the real binary; 24 of 24 mutants killed; 8 of 8
+  inverted assertions failed; hand-edited notes (CRLF, a byte-order mark, ID-less paragraphs,
+  embeds, unsupported link forms) handled per D25; a rename there and back restores the store
+  byte for byte.
+- Operator rulings at banking: an error is the same error when it is the same skipped folder
+  (CLI11's `newErrors`, which compares path and reason, rolled back every move that carried an
+  unloaded folder, so it is not used here); `NEW` is to be checked as strictly as `write` checks
+  a new stem, built in CLI13 instead of reworking this unit; an outside edit during a rename is
+  a recorded known gap.
+- Spec touched at banking (III.8, III.1): the postcondition's definition of "the same error";
+  the rename strictness ruling and the order of argument checks; `NEW.md` inside the folder;
+  the open-and-close element form; the known gaps for CLI12.

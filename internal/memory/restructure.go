@@ -124,16 +124,9 @@ type replacedNote struct {
 // nothing is rolled back over the other content (D28). what names the call
 // in errors. On success it returns the reloaded store.
 func (w *Writer) replaceNotes(before *Store, edits []noteEdit, what string) (*Store, error) {
-	done := make([]replacedNote, 0, len(edits))
-	for _, ed := range edits {
-		r, err := w.replaceNote(ed)
-		if err != nil {
-			if rerr := restoreNotes(done); rerr != nil {
-				return nil, fmt.Errorf("%w; restoring the notes already replaced failed: %v", err, rerr)
-			}
-			return nil, err
-		}
-		done = append(done, r)
+	done, err := w.replaceAll(edits)
+	if err != nil {
+		return nil, err
 	}
 	after := w.reload(edits[0].node.Path)
 	for _, r := range done {
@@ -145,6 +138,25 @@ func (w *Writer) replaceNotes(before *Store, edits []noteEdit, what string) (*St
 		return nil, newErrorErr(errs[0], what, restoreNotes(done))
 	}
 	return after, nil
+}
+
+// replaceAll replaces each edited folder note atomically, in order,
+// refusing one that changed on disk since it was loaded. If a replace
+// fails, every note already replaced is restored and the error returned.
+// On success it returns what restoreNotes needs to undo them all.
+func (w *Writer) replaceAll(edits []noteEdit) ([]replacedNote, error) {
+	done := make([]replacedNote, 0, len(edits))
+	for _, ed := range edits {
+		r, err := w.replaceNote(ed)
+		if err != nil {
+			if rerr := restoreNotes(done); rerr != nil {
+				return nil, fmt.Errorf("%w; restoring the notes already replaced failed: %v", err, rerr)
+			}
+			return nil, err
+		}
+		done = append(done, r)
+	}
+	return done, nil
 }
 
 // restoreNotes puts back the bytes each replaced note had, newest first,

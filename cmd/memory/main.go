@@ -8,11 +8,13 @@
 // one line on stderr with exit 1, or exit 75 when retrying can succeed
 // (busy, changed on disk). lint alone exits 2,
 // its report on stdout, when the store has errors, unless given
-// --exit-zero (Part III.7). delete and retag are the restructuring verbs
-// built so far (Part III.8): delete removes a block, a node, or with
-// --recursive a node and everything under it, and reports the links it
-// left dangling; retag renames or removes a tag across the store. It never
-// logs.
+// --exit-zero (Part III.7). delete, retag, move and rename are the
+// restructuring verbs built so far (Part III.8): delete removes a block, a
+// node, or with --recursive a node and everything under it, and reports
+// the links it left dangling; retag renames or removes a tag across the
+// store; move puts a node, with its subtree, under another parent or the
+// root, rewriting nothing; rename changes a node's stem and rewrites every
+// link to it. It never logs.
 package main
 
 import (
@@ -74,6 +76,18 @@ verbs:
                                         in frontmatter tags and inline
                                         #tags, nested tags (OLD/...) with
                                         it; with no NEW, remove OLD
+  move STEM --parent P                  move the node, with everything
+                                        under it, under the node P, or
+                                        under the root with --parent /;
+                                        no note is rewritten: links go by
+                                        stem; a move to the parent it
+                                        already has changes nothing
+  rename STEM NEW                       change the node's stem to NEW
+                                        (lowercase-hyphenated, not in use):
+                                        its folder and note are renamed
+                                        and every link to it or to its
+                                        blocks is rewritten;
+                                        links_rewritten counts the links
 
 The store is <parent>/memory. The parent is --parent-dir DIR (or
 --parent-dir=DIR), given before the verb; else MEMORY_PARENT_DIR from the
@@ -82,8 +96,8 @@ directory. An empty --parent-dir, or a variable set but empty, is an error.
 After the verb, --parent-dir is not an option. The parent must already
 exist. A missing store is an empty one: every verb, once its arguments
 pass, creates memory/ and memory/notes/ when they are missing, and nothing
-else. write, delete and retag take the store's write lock; exit code 75
-means busy or changed on disk: make the same call again.
+else. write, delete, retag, move and rename take the store's write lock;
+exit code 75 means busy or changed on disk: make the same call again.
 `
 
 // verb runs one verb's arguments against the store at loc and returns its
@@ -99,6 +113,8 @@ func verbs() map[string]verb {
 		"lint":   lintVerb,
 		"delete": deleteVerb,
 		"retag":  retagVerb,
+		"move":   moveVerb,
+		"rename": renameVerb,
 	}
 }
 

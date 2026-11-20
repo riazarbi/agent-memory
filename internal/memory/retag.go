@@ -267,15 +267,21 @@ func retagBody(n *Node, body []string, runs []lineRun, want []Block, from, to st
 		if err := retaggedTextErr(n, i, text); err != nil {
 			return false, err
 		}
-		r := runs[i]
-		body[r.start] = applyCuts(strings.Join(body[r.start:r.end], ""), sourceCuts(b, cuts))
-		for k := r.start + 1; k < r.end; k++ {
-			body[k] = ""
-		}
+		cutBlock(body, runs[i], b, cuts)
 		want[i].Text = text
 		changed = true
 	}
 	return changed, nil
+}
+
+// cutBlock applies cuts on block b's text to its source lines, which are
+// the run r of body: the rewritten lines are joined into the run's first
+// line and the rest emptied, so every byte the cuts do not name stays.
+func cutBlock(body []string, r lineRun, b Block, cuts []cut) {
+	body[r.start] = applyCuts(strings.Join(body[r.start:r.end], ""), sourceCuts(b, cuts))
+	for k := r.start + 1; k < r.end; k++ {
+		body[k] = ""
+	}
 }
 
 // retaggedTextErr refuses a block text a retag would leave empty, or no

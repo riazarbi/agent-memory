@@ -3,6 +3,88 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-20 - A node can change place and name: `move` relocates it with its subtree, and `rename` gives it a new stem and rewrites every link to it
+
+CLI12, the second restructuring unit (spec III.8, "`move`, exactly" and "`rename`, exactly").
+`move-block`, `split` and `merge` are not built (CLI13, CLI14), and no tool file, skill or prompt
+text ships for these verbs yet (CLI15): `agent/` is byte-for-byte unchanged, so no agent can call
+them until then.
+
+- `internal/memory/move.go` (new): `Writer.Move`. One `rename(2)` of the node's folder into the
+  parent's folder (`notes/` itself for `/`), under the write lock and from a fresh load. No note is
+  read or written, so every file keeps its bytes and mtime and whatever else is in the folder
+  (unloaded children, stray files) goes along. Refused: an unknown stem or parent (`NoNodeError`,
+  whose `Stem` says which), the node itself or its own descendant as parent, and an entry of the
+  node's name already in the parent's folder (checked with `Lstat`, so a plain file or a folder
+  that did not load both count). A move to the parent the node already has returns its result
+  before touching anything. The store is reloaded after the rename and the folder renamed back if
+  the check fails. Not done: D28's "changed on disk" check. A move replaces no bytes, so an edit
+  made by something that does not take the lock is carried along intact; there is nothing to
+  clobber and nothing to refuse.
+- `internal/memory/move.go`, `unsound`: the postcondition check for both verbs, and the trap in
+  this unit. CLI11's `newErrors` compares whole problems (path and reason). After a move or rename
+  that is wrong twice over: a folder inside the node that did not load is the same error at a new
+  path, and reasons quote paths the call changes (`stem "x" is already used by <path>`, `cannot
+  read folder: open <path>`). Compared that way, every move carrying an unloaded folder was rolled
+  back, against "whatever else is inside the folder goes with it" (the first run of the library
+  test showed it). So here an error is identified by the folder it skips: the paths of the errors
+  before the call are passed through the relocation (old folder to new), and the call fails only
+  when the store afterwards skips a folder it did not skip before, or the node did not load at
+  its new path. `newErrors` itself is unchanged and still serves `delete` and `retag`.
+- `internal/memory/rename.go` (new): `Writer.Rename` and `CheckStem`. Order: every rewritten note
+  is worked out first; the notes are replaced where they are (the renamed node's own included);
+  the folder note is renamed to `NEW.md`; the folder is renamed; the store is reloaded and
+  checked. A failure at any step undoes the steps before it, so the store is as it was: tested
+  for a note that cannot be replaced, each of the two renames, and the reload. Links are found
+  with `scanLinkSpans`, the reader's own scanner (no second parser): for each edge whose stem is
+  the old one, the bytes right after `[[` are replaced, so aliases and block IDs are untouched and
+  a `[[STEM]]` in inline code or in an unsupported form, which is not an edge, is left alone. The
+  replacement is made in the block's source lines (`sourceCuts`, as `retag` does), not by
+  re-encoding the note: line endings, a byte-order mark, ID-less paragraphs, blank-line runs and
+  a missing final newline all stay. The output is still loaded through the folder-note parser
+  (`verifyOutput`) before anything is written. Refused, naming `new`: a stem that is not valid,
+  the node's own stem, a loaded node's stem, an entry named `NEW` beside the folder. Decided where
+  the spec is silent: a file `NEW.md` already inside the node's folder is refused too, because
+  renaming the folder note onto it would silently overwrite it; a folder named `NEW` elsewhere in
+  the tree that did not load is not refused (the spec lists only loaded stems and the entry beside
+  the folder; `write` is stricter for creates); the stem syntax is checked before the lock is
+  taken, so `rename nowhere Bad_Stem` names `NEW`, not `STEM`. A replaced note found holding other
+  bytes at the reload is `ErrChangedOnDisk` and is not rolled back over, as D28 rules and
+  `replaceNotes` does; the rename is then complete on disk and the retry will say the old stem is
+  unknown (recorded as a gap, not fixed).
+- `internal/memory/restructure.go`: `replaceNotes` is split, behaviour unchanged. `replaceAll`
+  (new) is its first half, replacing several notes and restoring those already replaced when one
+  fails; `rename` needs the list it returns to restore the notes after a later step fails.
+- `internal/memory/retag.go`: `cutBlock` (new) is the three lines of `retagBody` that apply cuts
+  to a block's source lines, lifted out so `rename` uses the same code. No behaviour change.
+- `cmd/memory/move.go`, `rename.go` (new), `main.go`, `read.go`: the verbs, their results
+  (`<memory_move stem from parent path>`, `<memory_rename from stem links_rewritten>`, via
+  `encoding/xml`), the usage text and the package comment. Argument errors come before the store
+  is created and name the argument as typed: `STEM`, `--parent` (or `-parent`, if typed so), `NEW`,
+  or the surplus argument itself (`rename a b c` names `"c"`). `/` is refused as `STEM` and as
+  `NEW`, and accepted only as `--parent`. An unknown `--parent` lists near matches like an unknown
+  stem (`unknownNodeAmong`, which `unknownStemAmong` now calls; `read`'s message is unchanged).
+  Trap: the library's `NoNodeError` does not say which argument it is about. `move` looks the
+  stem up first, so an unknown stem equal to `STEM` is `STEM`'s and any other is `--parent`'s.
+  `writerAt` (new) is the "create the missing store, get its writer" pair both verbs share.
+- `README.md`: the Usage section documents both verbs (the examples, a paragraph each with the
+  result element, the refusals, the no-op move, all-or-nothing rename), and the status line lists
+  them. Also corrected there, having gone stale: "no verb moves or renames one yet", the list of
+  verbs that take the lock and create its file, and exit 75's list of verbs.
+- Tests: `internal/memory/move_rename_test.go` (new) covers the library: byte-exact rewrites
+  (CRLF, BOM, ID-less paragraphs), roll back at each step with injected failures, a real stem
+  collision caused by a move, an unloaded folder carried along, the lock. `cmd/memory/
+  move_rename_bin_test.go` and `move_rename_busy_bin_test.go` (new) cover the unit's eight
+  acceptance criteria through the built binary on the fixture store F. No existing test was
+  changed; none pinned the usage text or the verb list exactly.
+- Docs and agent files checked: `docs/spec/agent-memory.md` III.8 already holds both verbs'
+  rules and was not edited. `agent/README.md`, `agent/tools/*.json`, `agent/prompt/memory_usage.md`,
+  `agent/livecontext/memory_index.json` and `agent/memory/notes/` are deliberately unchanged
+  (CLI15 ships the tool files and rewrites the texts). Left stale on purpose, for the operator:
+  spec III.1 still lists only `write`, `delete` and `retag` as the verbs that take the lock file,
+  and `agent/README.md` still says no verb moves, renames or deletes a node (CLI11's known gap,
+  closed by CLI15).
+
 ## 2026-11-20 - Memory can lose things: `delete` removes a block, a node or a subtree and reports the links it broke, and `retag` renames or removes a tag store-wide
 
 CLI11, the first of the restructuring verbs (spec III.8). `move`, `rename`, `move-block`, `split`
