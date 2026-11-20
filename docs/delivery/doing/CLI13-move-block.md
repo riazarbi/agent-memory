@@ -58,11 +58,16 @@ All through the real binary. The fixture store `F` is the shipped starting tree 
    blocks `<C1>`, `<C2>`, `<P2>` in that order, `<P2>` reading "Atlas cutover is 2026-12-01;
    rollback is [[atlas-runbook]]."; `read priya` lists `<P1>`, `<P3>`. `priya.md` equals its old
    bytes minus `<P2>`'s paragraph and its separating blank line, with `<P3>`'s link target
-   changed; `atlas-cutover.md` equals its old bytes with `<C2>`'s first link target changed and
-   one block appended, laid out as `write --add` lays out a block. `notes-misc.md` and the
-   starting-tree notes keep bytes and mtime.
-   *Excludes:* a new ID for the moved block; re-encoding either note; inserting the block
-   anywhere but last; rewriting notes that hold no link to the block.
+   changed; `atlas-cutover.md` equals its old bytes with `<C2>`'s first link target changed, then
+   one blank line, then the line `Atlas cutover is 2026-12-01; rollback is [[atlas-runbook]].
+   ^<P2>`. `notes-misc.md` and the starting-tree notes keep bytes and mtime. **The target is not
+   tidied:** on a fresh `F`, edit `atlas-cutover.md` by hand to add, between `<C1>` and `<C2>`, a
+   paragraph "Hand-written, no ID." preceded by three blank lines; then `move-block <P2> --to
+   atlas-cutover` leaves that paragraph without an ID and the three blank lines in place, the
+   note being its old bytes plus the one link-target change and the appended block.
+   *Excludes:* a new ID for the moved block; re-encoding either note; giving IDs to the target's
+   ID-less paragraphs or collapsing its blank lines (what `write --add` does); inserting the
+   block anywhere but last; rewriting notes that hold no link to the block.
 2. **Every link to the block follows it; links to the node do not.** After criterion 1: `<P3>`
    reads "The date in [[atlas-cutover#^<P2>]] is firm."; `<C2>` reads "See
    [[atlas-cutover#^<P2>|the date]] and `[[priya#^<P2>]]`." (the backticked text untouched);
@@ -128,7 +133,18 @@ Local only: Go toolchain, temp dirs. No network, no live agent.
   `unsound` postcondition check (`move.go`); the writer's existing create check for a stem
   (the one `write` uses) for criterion 7. Do not write a second parser or a second collision
   rule.
+- The target note is appended to by byte surgery, not through the encoder that `write --add`
+  uses: that encoder also adopts ID-less paragraphs and collapses blank lines, which this verb
+  must not do (III.8, *`move-block`, exactly*).
 - The old note and the target note can each also hold links to the moved block, so one note may
   need two kinds of edit in the same replace.
 - `cmd/memory/move_rename_busy_bin_test.go` shows how the lock is held from another process.
 - The library does not log, and takes no new dependency.
+
+## Rework 1 (2026-11-20)
+The first build passed the gate but ran the target note through `write`'s layout code, as the
+locked spec's "exactly as `write --add` adds a block" told it to. That silently gave IDs to
+hand-written paragraphs in the target and collapsed its blank lines, unlike `delete --block`,
+`retag` and `rename`. Operator ruling: append by byte surgery and leave the rest of the target
+untouched. III.8 and criterion 1 are amended; the first build is discarded unverified (its
+verifier run was lost to a machine restart) and a fresh builder runs from this commit.

@@ -1843,7 +1843,7 @@ creates a node on its own (III.6).
   "reading a missing store creates nothing"). Every verb, once its arguments have passed (III.2),
   creates `<parent>/memory` and `<parent>/memory/notes` as needed (mode 0755, forced on what it
   creates; a directory that already exists keeps its mode; another process creating it first is
-  fine), and nothing else: no node, and no lock file except the one a writing verb takes (`write`, and the restructuring verbs as they are built, III.8: `delete`, `retag`, `move`, `rename`). Then it reports on the empty
+  fine), and nothing else: no node, and no lock file except the one a writing verb takes (`write`, and the restructuring verbs as they are built, III.8: `delete`, `retag`, `move`, `rename`, `move-block`). Then it reports on the empty
   store: `read` with no stem prints the root with no nodes and no tags; `read STEM` is the
   unknown-stem error; `search` prints `matched="0"`; `index` prints the empty index (III.2); `lint`
   prints `nodes="0" errors="0" warnings="0"`. Once `notes/` exists, `read`, `search`, `index` and
@@ -2210,8 +2210,16 @@ exactly as it was.
   - `move-block ID --to STEM` takes the block with that ID out of the node that holds it and adds
     it as the last block of `STEM`, with the same ID and the same text. It is removed from its
     old note exactly as `delete --block` removes a block (nothing else in that note changes
-    except link targets, below), and added to `STEM` exactly as `write --add` adds a block,
-    except that it brings its ID. Its old node may be left with no blocks.
+    except link targets, below). Its old node may be left with no blocks.
+  - **It is appended to `STEM`'s note and nothing else in that note changes** (operator ruling
+    2026-11-20, replacing "exactly as `write --add` adds a block"). The block is written as one
+    new last paragraph, its text followed by a space and `^ID`, after exactly one blank line,
+    with the note's own line ending and a final line ending. Every byte already in the note
+    stays, link targets apart: a hand-written paragraph with no ID is **not** given one, runs of
+    blank lines are not collapsed, and the frontmatter is not re-emitted. This is how `delete
+    --block`, `retag` and `rename` treat a note, and unlike `write`, which adopts ID-less
+    paragraphs and reports them. A note with no blocks gets the block after its frontmatter,
+    laid out as `write` lays out a first block.
   - Every link to the block, `[[old#^ID]]` and `[[old#^ID|alias]]`, becomes the same with `STEM`,
     wherever it is: in other nodes, in the old node's remaining blocks, in `STEM`'s blocks, and
     in the moved block itself. Aliases are kept. Links to the old *node* (`[[old]]`) are not
@@ -2220,10 +2228,17 @@ exactly as it was.
   - `links_rewritten` counts links. Only notes that change are written: the old note, `STEM`'s
     note, and notes holding a link to the block.
   - Refused, exit 1: no block has that ID (names `ID`); the ID is carried by more than one block
-    (a lint warning, III.7: the call cannot tell which is meant); `--to` missing, unknown (near
+    (a lint warning, III.7: the call cannot tell which is meant; twice within one node counts
+    too); `--to` missing, unknown (near
     matches listed) or `/` (the root holds no blocks); the block is already in `STEM`.
   - `ID` is given as `read` prints it (`m-7f3a2k`), not normalised.
-  - All or nothing, as `rename`.
+  - Checks run in this order: missing arguments and `--to /` (before the store is created), `ID`
+    unknown, `ID` carried more than once, `--to` unknown, the block already in `STEM`.
+  - A link `[[STEM#^ID]]` that was dangling before the call resolves afterwards and is not
+    counted, as with `rename`'s `[[NEW]]`. A link naming the ID under some other node is left
+    alone.
+  - All or nothing, as `rename`, with `rename`'s known gaps: the crash window, an outside edit
+    during the call (exit 75, no roll back), and restored notes carrying new mtimes.
 - **`retag`, exactly** (CLI11; operator rulings 2026-11-20).
   - It changes both places a tag lives: a node's frontmatter `tags`, and inline `#tag` words in
     block text, located as `search` locates them (D31: `#` at the start of the text or after
