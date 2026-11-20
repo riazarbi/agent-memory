@@ -2218,8 +2218,16 @@ exactly as it was.
     stays, link targets apart: a hand-written paragraph with no ID is **not** given one, runs of
     blank lines are not collapsed, and the frontmatter is not re-emitted. This is how `delete
     --block`, `retag` and `rename` treat a note, and unlike `write`, which adopts ID-less
-    paragraphs and reports them. A note with no blocks gets the block after its frontmatter,
-    laid out as `write` lays out a first block.
+    paragraphs and reports them.
+  - Settled at CLI13's banking (2026-11-20), as built: a note that already ends in blank lines
+    keeps them and gets none added, so the block may follow more than one blank line ("exactly
+    one" is what is added when there is none). A note with no blocks gets the block after its
+    frontmatter, laid out as `write` lays out a first block, and blank lines that followed the
+    frontmatter are dropped: the one exception to "every byte stays". A block whose ID sat on
+    its own line arrives as `text ^ID`; a block that is only an ID arrives as `^ID`. The line
+    ending is the target note's (its opening delimiter line's).
+  - The moved block keeps the reader warnings its text already had (an unsupported link form, an
+    embed). They are then reported under its new node; that is not a new warning.
   - Every link to the block, `[[old#^ID]]` and `[[old#^ID|alias]]`, becomes the same with `STEM`,
     wherever it is: in other nodes, in the old node's remaining blocks, in `STEM`'s blocks, and
     in the moved block itself. Aliases are kept. Links to the old *node* (`[[old]]`) are not
@@ -2238,7 +2246,9 @@ exactly as it was.
     counted, as with `rename`'s `[[NEW]]`. A link naming the ID under some other node is left
     alone.
   - All or nothing, as `rename`, with `rename`'s known gaps: the crash window, an outside edit
-    during the call (exit 75, no roll back), and restored notes carrying new mtimes.
+    during the call (exit 75, no roll back; the window between the replace and the reload has
+    no test for `move-block`), and restored notes carrying new mtimes. The duplicate-ID check
+    sees loaded notes only: an ID also present in a note that did not load is invisible to it.
 - **`retag`, exactly** (CLI11; operator rulings 2026-11-20).
   - It changes both places a tag lives: a node's frontmatter `tags`, and inline `#tag` words in
     block text, located as `search` locates them (D31: `#` at the start of the text or after

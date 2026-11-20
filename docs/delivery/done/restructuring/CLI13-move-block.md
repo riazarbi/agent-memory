@@ -148,3 +148,22 @@ hand-written paragraphs in the target and collapsed its blank lines, unlike `del
 `retag` and `rename`. Operator ruling: append by byte surgery and leave the rest of the target
 untouched. III.8 and criterion 1 are amended; the first build is discarded unverified (its
 verifier run was lost to a machine restart) and a fresh builder runs from this commit.
+
+## Post-verification notes (2026-11-20)
+- Second build, from the reworked spec, in one pass. Production: `internal/memory/moveblock.go`
+  (new); `restructure.go` (`rewritten`/`noteChange`: per-block link cuts, drop one block, append
+  one block, then verify; `withLastBlock` is the append); `rename.go` (`refusal` calls
+  `findFolders`, the walk `write`'s create check uses; `retargetCuts`); `delete.go`
+  (`withoutBlock` is one call of `rewritten`); `cmd/memory/moveblock.go` (new), `main.go`. Tests:
+  `internal/memory/move_block_test.go`, `cmd/memory/move_block_bin_test.go`,
+  `move_block_busy_bin_test.go`. No existing test, document or `agent/` file was touched
+  (confirmed with `git diff`).
+- Verifier: all eight criteria PASS through the real binary; 19 of 20 mutants killed. The
+  survivor removes the changed-on-disk check between the replace and the reload, which no
+  `move-block` test covers; recorded as a known gap, not rebuilt.
+- Operator accepted 2026-11-20. Spec settled at banking, as built (III.8): trailing blank lines
+  in the target are kept; the empty-target exception; ID-on-its-own-line normalised; warnings
+  travel with the block; the duplicate-ID check sees loaded notes only.
+- `TestUsageListsMoveAndRename` (CLI12) pins the usage sentence "write, delete, retag, move and
+  rename take the store's write lock". The builder kept it and added ", and so does move-block".
+  CLI14 meets the same sentence.
