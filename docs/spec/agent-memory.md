@@ -2206,6 +2206,24 @@ exactly as it was.
   - All or nothing: if any note cannot be replaced, or the reload shows an error the store did
     not have before, every rewritten note is restored, the folder and note get their old names
     back, and the call fails.
+- **`move-block`, exactly** (CLI13).
+  - `move-block ID --to STEM` takes the block with that ID out of the node that holds it and adds
+    it as the last block of `STEM`, with the same ID and the same text. It is removed from its
+    old note exactly as `delete --block` removes a block (nothing else in that note changes
+    except link targets, below), and added to `STEM` exactly as `write --add` adds a block,
+    except that it brings its ID. Its old node may be left with no blocks.
+  - Every link to the block, `[[old#^ID]]` and `[[old#^ID|alias]]`, becomes the same with `STEM`,
+    wherever it is: in other nodes, in the old node's remaining blocks, in `STEM`'s blocks, and
+    in the moved block itself. Aliases are kept. Links to the old *node* (`[[old]]`) are not
+    touched: the node is still there. Links the moved block holds to other things move with its
+    text, unchanged.
+  - `links_rewritten` counts links. Only notes that change are written: the old note, `STEM`'s
+    note, and notes holding a link to the block.
+  - Refused, exit 1: no block has that ID (names `ID`); the ID is carried by more than one block
+    (a lint warning, III.7: the call cannot tell which is meant); `--to` missing, unknown (near
+    matches listed) or `/` (the root holds no blocks); the block is already in `STEM`.
+  - `ID` is given as `read` prints it (`m-7f3a2k`), not normalised.
+  - All or nothing, as `rename`.
 - **`retag`, exactly** (CLI11; operator rulings 2026-11-20).
   - It changes both places a tag lives: a node's frontmatter `tags`, and inline `#tag` words in
     block text, located as `search` locates them (D31: `#` at the start of the text or after
