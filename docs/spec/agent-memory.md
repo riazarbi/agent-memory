@@ -2170,6 +2170,34 @@ exactly as it was.
     then the link's position in the block. A link that was already dangling before the call is
     not listed. The same link written twice in a block is listed twice. A holding paragraph
     that has no ID yet has no `block` attribute.
+- **`move`, exactly** (CLI12).
+  - `move STEM --parent P` renames the node's folder into `P`'s folder (`notes/` itself for `/`).
+    It is one directory rename: no note is rewritten, every file keeps its bytes and mtime, and
+    whatever else is inside the folder (unloaded children, stray files) goes with it.
+  - Refused, exit 1: `P` unknown (near matches listed, III.3); `P` is `STEM` or a descendant of
+    `STEM`; an entry named `STEM` already exists in `P`'s folder (it can only be something that
+    did not load, since stems are unique among loaded nodes).
+  - `P` already `STEM`'s parent: exit 0, the result element as usual, nothing written.
+  - The store is reloaded after the rename; on an error it did not have before, the folder is
+    renamed back and the call fails.
+- **`rename`, exactly** (CLI12).
+  - `rename STEM NEW` renames the folder to `NEW` and its folder note to `NEW.md`, where they
+    are, and rewrites the target of every link to the node: `[[STEM]]`, `[[STEM|alias]]`,
+    `[[STEM#^id]]` and `[[STEM#^id|alias]]` become the same with `NEW`. Aliases and block IDs are
+    kept. The links are the ones the reader sees as edges (D25): a link inside inline code or an
+    unsupported `[[…]]` form is text and is left alone.
+  - Links are rewritten wherever they are, the renamed node's own blocks included. In each
+    rewritten note only the link targets change; every other byte stays. Notes with no link to
+    the node are not written and keep their mtime.
+  - `links_rewritten` counts links, not blocks or notes.
+  - Refused, exit 1: `NEW` is not valid stem syntax (D25); `NEW` is a loaded node's stem, `STEM`
+    itself included; an entry named `NEW` already exists beside the node's folder.
+  - A link `[[NEW]]` that was dangling before the call resolves to the renamed node afterwards.
+    It is not counted in `links_rewritten`, because it is not rewritten.
+  - The description, tags and properties are not changed.
+  - All or nothing: if any note cannot be replaced, or the reload shows an error the store did
+    not have before, every rewritten note is restored, the folder and note get their old names
+    back, and the call fails.
 - **`retag`, exactly** (CLI11; operator rulings 2026-11-20).
   - It changes both places a tag lives: a node's frontmatter `tags`, and inline `#tag` words in
     block text, located as `search` locates them (D31: `#` at the start of the text or after
