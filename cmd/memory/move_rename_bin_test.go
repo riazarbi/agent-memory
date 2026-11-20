@@ -550,7 +550,7 @@ func TestUsageListsMoveAndRename(t *testing.T) {
 		t.Fatalf("no arguments: exit %d, stdout %q", r.code, r.stdout)
 	}
 	mustContain(t, "usage", r.stderr, "move STEM --parent P", "rename STEM NEW", "links_rewritten",
-		"write, delete, retag, move and rename take the store's write lock")
+		"write lock")
 }
 
 // The README's Usage section documents both verbs, and the status line

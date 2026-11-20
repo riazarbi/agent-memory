@@ -389,7 +389,7 @@ func TestUsageListsMoveBlock(t *testing.T) {
 	if r.code != 1 || r.stdout != "" {
 		t.Fatalf("no arguments: exit %d, stdout %q", r.code, r.stdout)
 	}
-	mustContain(t, "usage", r.stderr, "move-block ID --to STEM", "links_rewritten", "so does move-block")
+	mustContain(t, "usage", r.stderr, "move-block ID --to STEM", "links_rewritten", "write lock")
 }
 
 // The README's Usage section documents move-block and the stricter

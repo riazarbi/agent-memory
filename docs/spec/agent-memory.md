@@ -2249,6 +2249,52 @@ exactly as it was.
     during the call (exit 75, no roll back; the window between the replace and the reload has
     no test for `move-block`), and restored notes carrying new mtimes. The duplicate-ID check
     sees loaded notes only: an ID also present in a note that did not load is invisible to it.
+- **`split`, exactly** (CLI14).
+  - `split STEM --into NEW --parent P --description D --block ID [--block ID]…` creates the node
+    `NEW` under `P` (`/` for the root) and moves the named blocks of `STEM` into it, in the order
+    the `--block` flags are given, with their IDs and text. `STEM` stays where it is with the
+    blocks not named, and may be left with none.
+  - `NEW` is created as `write NEW --parent P --description D` creates a node: the same checks
+    on `NEW` (D28's create rules, as `rename`), on `P` and on `D`, the same folder, modes and
+    note layout. Its note is byte-equal to the note a `write` create with one `--add` per moved
+    block would make, except that each block carries its own ID. It gets no tags and no
+    properties: `STEM`'s are not copied (decided 2026-11-20 without the operator, for review;
+    a `write --tag` afterwards sets them).
+  - `P` may be `STEM` itself (the new node is its child), any node under it, or any other node.
+  - Each block leaves `STEM`'s note as `delete --block` removes a block. Every link to a moved
+    block, `[[STEM#^ID]]` in any form, becomes `[[NEW#^ID]]`, wherever it is, the moved blocks'
+    own text included. Links to the node `STEM` are not touched.
+  - `blocks` is the number moved, `left` the number remaining in `STEM`, `links_rewritten` the
+    links rewritten.
+  - Refused, exit 1: `--into`, `--parent`, `--description` or every `--block` missing; a
+    `--block` that is not a block of `STEM` (names `--block` and the ID); the same ID twice; an
+    ID carried by more than one block (as `move-block`); `STEM` or `P` unknown; `NEW` refused
+    by `write`'s create rules; `/` as `STEM` or `NEW`.
+  - All or nothing, as `rename`: after a failure no folder `NEW` is left behind.
+- **`merge`, exactly** (CLI14).
+  - `merge FROM --into TO` folds `FROM` into `TO` and removes `FROM`:
+    - `FROM`'s blocks are appended to `TO`'s note in `FROM`'s file order, each as `move-block`
+      appends a block (III.8, *`move-block`, exactly*): IDs and text kept, nothing else in
+      `TO`'s body changed.
+    - Everything in `FROM`'s folder except its folder note and dot-entries moves into `TO`'s
+      folder: its child nodes with their subtrees, and anything that did not load (the
+      Postcondition's "carry along"). `children` counts the loaded child nodes moved.
+    - Every link to `FROM`, `[[FROM]]` and `[[FROM#^id]]` in any form, becomes the same with
+      `TO`, wherever it is, including in `TO` (where it becomes a link to itself) and in the
+      moved blocks.
+    - `TO`'s tags become `TO`'s tags followed by those of `FROM`'s it lacks, in `FROM`'s order;
+      `tags_added` counts them. The frontmatter is re-emitted only when a tag is added (D26, as
+      `retag`).
+    - `TO` keeps its description and properties. `FROM`'s description and properties are
+      discarded with its note.
+    - `FROM`'s folder, then holding only its note and dot-entries, is removed as `delete`
+      removes a node.
+  - Refused, exit 1: `--into` missing; `FROM` or `TO` unknown; `TO` is `FROM`; `TO` is a
+    descendant of `FROM` (merge the child into the parent instead); `/` as `FROM` or `TO`; an
+    entry that would move into `TO`'s folder has the name of an entry already there (names the
+    entry; decided 2026-11-20 without the operator, for review).
+  - A child merges up into its parent like any other merge: its children land beside it.
+  - All or nothing, as `rename`, with `rename`'s and `delete`'s known gaps.
 - **`retag`, exactly** (CLI11; operator rulings 2026-11-20).
   - It changes both places a tag lives: a node's frontmatter `tags`, and inline `#tag` words in
     block text, located as `search` locates them (D31: `#` at the start of the text or after
