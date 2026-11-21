@@ -3,6 +3,88 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-21 - An agent can be given the restructuring verbs, is told on every turn only what memory is for, and learns how to use it from three skills
+
+CLI15, the last restructuring unit (spec III.8, "Tool files", "Tool descriptions" and "The prompt
+and the skills"; III.4). Everything in this entry is under `agent/`, the READMEs and tests: no
+production Go changed, no verb accepts, prints or refuses anything it did not before. **An existing
+install must delete `<state dir>/prompt/memory_usage.md`** when it copies in `memory_purpose.md`,
+or the model reads both on every turn; both READMEs' install commands do it.
+
+- `agent/tools/memory_move.json`, `memory_rename.json`, `memory_move_block.json`,
+  `memory_split.json`, `memory_merge.json`, `memory_delete.json`, `memory_retag.json` (new): one
+  shell-tool file per restructuring verb, each `{"command": "memory", "prepend_args":
+  ["--parent-dir", "${AGENT_STATE_DIR}", "<verb>"], "read_only": false, "allow_user_args": true,
+  "forbidden_args": []}` with III.8's description, generated from the spec's quoted text, not
+  retyped. Trap: the file is `memory_move_block.json` but its verb is `move-block`; `move_block`
+  is an unknown verb. They ship together so that no release offers the model part of the set the
+  `memory-restructure` skill describes. Nothing pins `--recursive` on or off: the operator
+  withholds it by editing the installed file (see `agent/README.md` below).
+- `agent/prompt/memory_purpose.md` (new), `agent/prompt/memory_usage.md` (deleted): the every-turn
+  prompt file is now III.8's purpose text, two paragraphs on what memory is and what it is for.
+  "What to save", "How to write it" and "Before you answer" left it for the skills. The cost,
+  accepted in the spec: that advice is no longer in front of the model on every turn, only each
+  skill's one-line description is.
+- `agent/skills/memory-usage/SKILL.md`, `agent/skills/memory-capture/SKILL.md`,
+  `agent/skills/memory-restructure/SKILL.md` (new): III.8's three skill texts, byte for byte, in
+  the agent's skill format (frontmatter of exactly `name` and `description`, the folder named as
+  `name`). No body names a node, and each refers to tools by what they do, since an operator may
+  install only some.
+- `agent/README.md`: the table lists the seven tool files, the purpose text and the three skills,
+  with the new destination `<state dir>/skills/`; the install commands make `skills/`, copy the
+  three skill folders, copy `memory_purpose.md` and `rm -f` the old `memory_usage.md`. New section
+  "The restructuring tools": each is granted by installing its file and withheld by leaving it
+  out, and `--recursive` is withheld from an installed `memory_delete.json` with
+  `"forbidden_args": ["--recursive", "-recursive"]`, both spellings because the agent refuses a
+  forbidden argument by exact match and `memory` takes a flag with one dash or two
+  (`--recursive=true` needs no entry: `memory` refuses a value on the flag). "The guidance" became
+  "The purpose text and the skills", which says the skill bodies are read only when the model
+  loads them and which skills to leave out with which tools. The exit-75 sentence now covers every
+  description but `memory_lint.json`'s. Removed: "no verb moves, renames or deletes a node, so it
+  can never remove one", which the tool files make false. Decided where the spec is silent: the
+  `rm -f` is in the install commands rather than only in prose, so that following the README
+  cannot leave both prompt files in place; `rm -f` because a fresh install has no such file.
+- `README.md`: the status line, the wiring guide's opening and step 3 name `memory_purpose.md`,
+  the three skills and the twelve tool files; step 3's commands install the skills and remove the
+  old prompt file, as `agent/README.md`'s do. The Usage section and the store paragraphs were
+  checked and needed no change (no verb changed).
+- `cmd/memory/main.go`: checked, not changed. Neither the usage text nor the package comment names
+  a shipped file, so there was nothing to rename; a test now fails if either names
+  `memory_usage.md`.
+- `cmd/memory/restructure_tools_test.go` (new): each of the seven files against the spec (exactly
+  the six keys, the pinned verb, not read-only, `forbidden_args` `[]`, the description read from
+  III.8); no description says "area", names a starting-tree stem or mentions `--parent-dir`; and
+  every example in every description is read out of the description (its JSON arrays) and run
+  through its tool file as the agent runs it, on a fixture built with the shipped
+  `memory_write.json`, checking what the verb did. The fixture uses the example's own stems and
+  tags, and replaces only block IDs and `<parent stem>`. Every `["` in a description must open an
+  example, so the extractor cannot silently miss one.
+- `cmd/memory/skills_test.go` (new): the purpose text (byte-equal to the spec, no `##` heading,
+  none of the old sections, alone in `agent/prompt/`) and the skills (byte-equal to the spec, the
+  only file in a folder named as `name`, loadable by the format rules of III.8, written out as
+  `skillFormatProblems`). `TestSkillFormatCheckRefusesBadSkills` runs that check over ten broken
+  variants of a shipped skill, so the check is known to refuse what the agent's loader refuses.
+  Not done: loading the skills with the agent's own loader, which lives in the agent repo.
+- `cmd/memory/agent_docs_test.go` (new): both READMEs' install commands, run on a state dir that
+  has the old prompt file, an operator's own prompt file and an operator's own skill, remove only
+  the old file and install everything; `memory_usage.md` is named nowhere except in a line that
+  says to delete it; the README's `forbidden_args` are parsed out of it and shown to be both
+  needed (`delete X -recursive` deletes a subtree) and enough (`--recursive=true`, `-recursive=true`
+  and the `=false` forms are refused by the binary and delete nothing). Some checks there pin
+  README wording by pattern ("exact match", "one dash or two", "only when the model loads"):
+  prose cannot be tested any other way, and a reworded README must keep saying those things.
+- Existing tests: none edited. The nine that were red at the lock (the eight the unit lists and
+  `TestToolFilesSchema`) are green. Comments in older test files that say "the four tool files" or
+  "placing usage.md" now read stale and were left, as the unit says.
+- Docs and agent files checked for the old behaviour: `README.md`, `agent/README.md`, every file
+  in `agent/tools/`, `agent/livecontext/memory_index.json`, `agent/prompt/`, `agent/skills/`,
+  `agent/memory/notes/` (unchanged), the usage text and package comment. The five existing tool
+  files and the live-context entry are byte-for-byte unchanged; `memory_write.json` keeps "Tags
+  cannot be cleared and blocks cannot be deleted.", which is true of `write`.
+- Not done, by scope: a dream or audit recipe, a `memory-lint` skill, any agent-side change. No
+  dependency added (`gopkg.in/yaml.v3`, already required, is now also imported by a test in
+  `cmd/memory`).
+
 ## 2026-11-20 - A node that covers two subjects can be divided and two nodes about one subject joined, each in one call: `split` and `merge`
 
 CLI14, the fourth restructuring unit (spec III.8, "`split`, exactly" and "`merge`, exactly").

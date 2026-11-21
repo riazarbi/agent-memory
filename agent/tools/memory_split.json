@@ -1,0 +1,12 @@
+{
+  "command": "memory",
+  "description": "Split a node in your durable memory that has come to cover two subjects: move some of its blocks into a new node. The first argument is the stem of the node to split; --into is the new node's stem (lowercase-hyphenated, not already in use); --description is its one-line description; each --block ID names a block to move, in the order they should appear; --parent says where the new node goes, and you must choose. Give the split node's own stem as --parent when the new subject is a narrower part of it. Give another node's stem, or / for the top level, when the new subject is a separate thing that was only filed there. The blocks keep their IDs and links to them are rewritten. The original node stays where it is with the blocks you did not name. Example: [\"priya\", \"--into\", \"atlas-cutover\", \"--parent\", \"<parent stem>\", \"--description\", \"The Atlas cutover: plan, owners and dates\", \"--block\", \"m-7f3a2k\", \"--block\", \"m-2b7q8w\"]. If the command exits with code 75 (\"busy\" or \"changed on disk\"), run the same command again.",
+  "read_only": false,
+  "prepend_args": [
+    "--parent-dir",
+    "${AGENT_STATE_DIR}",
+    "split"
+  ],
+  "forbidden_args": [],
+  "allow_user_args": true
+}

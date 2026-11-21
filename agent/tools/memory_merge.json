@@ -1,0 +1,12 @@
+{
+  "command": "memory",
+  "description": "Merge one node of your durable memory into another when both are about the same subject. The first argument is the stem of the node to fold in; --into is the stem of the node to keep. The kept node receives the other's blocks (at the end, IDs unchanged), its children and its tags, and keeps its own description. Every link to the folded-in node or its blocks is rewritten to the kept node, and the folded-in node is removed. A node cannot be merged into one of its own children; merge the child into it instead. Afterwards read the kept node and tidy blocks that now repeat each other. Example: [\"outbox-rules\", \"--into\", \"outbox-etiquette\"]. If the command exits with code 75 (\"busy\" or \"changed on disk\"), run the same command again.",
+  "read_only": false,
+  "prepend_args": [
+    "--parent-dir",
+    "${AGENT_STATE_DIR}",
+    "merge"
+  ],
+  "forbidden_args": [],
+  "allow_user_args": true
+}

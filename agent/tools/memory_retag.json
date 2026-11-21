@@ -1,0 +1,12 @@
+{
+  "command": "memory",
+  "description": "Rename or remove a tag across your whole durable memory. Give the tag to change, then the tag to use instead: every node that has the first gets the second, once. Give only one tag to remove it from every node. Use it to fold variants of one tag into a single spelling; the index lists the tags in use. Examples: [\"escalations\", \"escalation\"], [\"misc\"]. If the command exits with code 75 (\"busy\" or \"changed on disk\"), run the same command again.",
+  "read_only": false,
+  "prepend_args": [
+    "--parent-dir",
+    "${AGENT_STATE_DIR}",
+    "retag"
+  ],
+  "forbidden_args": [],
+  "allow_user_args": true
+}

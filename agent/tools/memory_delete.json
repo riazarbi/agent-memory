@@ -1,0 +1,12 @@
+{
+  "command": "memory",
+  "description": "Delete from your durable memory. This cannot be undone. Give a node's stem and --block ID to delete one block. Give only the stem to delete the node; a node that has children is refused unless you add --recursive, which deletes it and everything under it. Links to what you deleted are not rewritten: the result lists each one as dangling, with the node and block that holds it, so you can rewrite those blocks. Delete what is wrong or no longer matters; to correct a claim, replace the block's text instead. Examples: [\"outbox-etiquette\", \"--block\", \"m-7f3a2k\"], [\"old-plan\"], [\"old-plan\", \"--recursive\"]. If the command exits with code 75 (\"busy\" or \"changed on disk\"), run the same command again.",
+  "read_only": false,
+  "prepend_args": [
+    "--parent-dir",
+    "${AGENT_STATE_DIR}",
+    "delete"
+  ],
+  "forbidden_args": [],
+  "allow_user_args": true
+}

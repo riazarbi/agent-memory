@@ -4,7 +4,7 @@ The command is `memory`.
 
 Long-term memory for an AI agent: a tree of markdown notes with YAML frontmatter, which a model can read, write and search, and which a human can browse as an Obsidian vault.
 
-**Status:** the library (`internal/memory`) and the `memory` CLI are built and tested. The CLI's verbs are `read`, `write`, `search`, `index`, `lint`, `delete`, `retag`, `move`, `rename`, `move-block`, `split` and `merge`; it imposes no structure, and a missing store is an empty one, created empty by the first call of any verb. The repo's `agent/` folder ships everything an agent needs (shell-tool files, guidance, a live-context entry, an optional starting tree), and every merge to `main` publishes release archives carrying the binary and that folder.
+**Status:** the library (`internal/memory`) and the `memory` CLI are built and tested. The CLI's verbs are `read`, `write`, `search`, `index`, `lint`, `delete`, `retag`, `move`, `rename`, `move-block`, `split` and `merge`; it imposes no structure, and a missing store is an empty one, created empty by the first call of any verb. The repo's `agent/` folder ships everything an agent needs (a shell-tool file for each verb, the restructuring verbs included; a prompt file saying what memory is for; three skills on consulting, saving to and reorganising memory; a live-context entry; an optional starting tree), and every merge to `main` publishes release archives carrying the binary and that folder.
 
 The design is in [`docs/spec/agent-memory.md`](docs/spec/agent-memory.md).
 
@@ -141,7 +141,7 @@ Results are XML on stdout with exit 0. An error is one line on stderr with exit 
 
 ## Wiring it to an agent
 
-The agent knows nothing about memory. It sees shell tools, which run `memory` as a command, and whatever context the operator gives it. Below, `<state dir>` is the agent's state dir (by default `.agent` in its working directory), written as an absolute path. The agent's store is `<state dir>/memory`.
+The agent knows nothing about memory. It sees shell tools, which run `memory` as a command, and whatever context the operator gives it: a prompt file, skills, a live-context entry. Below, `<state dir>` is the agent's state dir (by default `.agent` in its working directory), written as an absolute path. The agent's store is `<state dir>/memory`.
 
 ### 1. Install the binary
 
@@ -163,17 +163,27 @@ Shell tools and live-context entries run `memory` by name, so it must be on the 
 
 ### 3. Copy the agent files
 
-[`agent/README.md`](agent/README.md) says what each file is, which ones to leave out, which agent versions can use them (the agent must substitute `${AGENT_STATE_DIR}`), and how to point an agent at a shared store. From the directory holding `agent/` (the unpacked archive's folder, or a checkout):
+The `agent/` folder holds:
+
+- the tool files, one per verb: `memory_read.json`, `memory_write.json`, `memory_search.json`, `memory_index.json` and `memory_lint.json`, and the seven restructuring tools, `memory_move.json`, `memory_rename.json`, `memory_move_block.json`, `memory_split.json`, `memory_merge.json`, `memory_delete.json` and `memory_retag.json`. Installing a file grants that verb, and leaving it out withholds it;
+- `memory_purpose.md`, a prompt file read on every turn, which says what memory is for and nothing else;
+- the skills `memory-usage` (consulting memory), `memory-capture` (what to save and how to write it) and `memory-restructure` (reorganising it), whose bodies are read only when the model loads them;
+- a live-context entry that shows the index at the start of each input;
+- an optional starting tree.
+
+[`agent/README.md`](agent/README.md) says what each file is, which ones to leave out (the restructuring tools above all: they let the agent delete), how to withhold `delete --recursive` alone, which agent versions can use the files (the agent must substitute `${AGENT_STATE_DIR}`), and how to point an agent at a shared store. From the directory holding `agent/` (the unpacked archive's folder, or a checkout):
 
 ```bash
-mkdir -p <state dir>/tools <state dir>/prompt <state dir>/livecontext
+mkdir -p <state dir>/tools <state dir>/prompt <state dir>/skills <state dir>/livecontext
 cp agent/tools/memory_*.json <state dir>/tools/
-cp agent/prompt/memory_usage.md <state dir>/prompt/
+cp agent/prompt/memory_purpose.md <state dir>/prompt/
+rm -f <state dir>/prompt/memory_usage.md
+cp -R agent/skills/memory-usage agent/skills/memory-capture agent/skills/memory-restructure <state dir>/skills/
 cp agent/livecontext/memory_index.json <state dir>/livecontext/
 [ -e <state dir>/memory ] || cp -R agent/memory <state dir>/
 ```
 
-The last line installs the optional starting tree (the top-level nodes `user`, `projects`, `people` and `topics`) only when the agent has no store yet, so it never copies into an existing store. Leave it out to start from an empty store, which the agent's first `memory` call creates (the live-context index, at the start of its first input, if you installed that entry). Once that has happened, `<state dir>/memory` exists and the last line copies nothing, so install the starting tree before the agent first runs; [`agent/README.md`](agent/README.md) says how to rearrange the tree.
+The `rm -f` line is for an install made before the skills existed: `memory_purpose.md` replaces the prompt file it removes, and with both in place the model would read both on every turn (delete the old one by hand if you copy the files another way). The last line installs the optional starting tree (the top-level nodes `user`, `projects`, `people` and `topics`) only when the agent has no store yet, so it never copies into an existing store. Leave it out to start from an empty store, which the agent's first `memory` call creates (the live-context index, at the start of its first input, if you installed that entry). Once that has happened, `<state dir>/memory` exists and the last line copies nothing, so install the starting tree before the agent first runs; [`agent/README.md`](agent/README.md) says how to rearrange the tree.
 
 ## Development
 

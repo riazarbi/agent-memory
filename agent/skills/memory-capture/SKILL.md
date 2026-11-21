@@ -1,9 +1,9 @@
-# Memory
+---
+name: memory-capture
+description: What to save in your durable memory and how to write it so it is still useful later. Use when you learn something that may be worth keeping, and before you save anything to memory.
+---
 
-You have a durable memory: notes that outlive this conversation, kept as a
-tree of nodes. Its index, when you are shown one, lists the top-level nodes,
-their children and the tags in use; that is its structure. What you can do
-with it is exactly what your memory tools allow.
+# Saving to memory
 
 ## What to save
 Save a claim only if it would still matter if this conversation were cleared
@@ -28,8 +28,4 @@ records of finished work; secrets.
 - File it under the node it belongs to, as the index shows the tree — don't
   hunt for a deep location. Start a new top-level node only when nothing in
   the tree fits.
-
-## Before you answer
-For questions about the operator's preferences, people, or past work, check
-the index and read the relevant node first. A note can be stale: re-check
-anything it says about files or the outside world before acting on it.
+- Save it and carry on with the task. Do not reorganise memory now.
