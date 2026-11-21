@@ -60,7 +60,7 @@ func parseSplitArgs(args []string) (splitArgs, error) {
 	flags.StringVar(&sa.req.Parent, flagParent, "", "")
 	flags.StringVar(&sa.req.Description, flagDescription, "", "")
 	flags.Func(flagBlock, "", func(s string) error { sa.req.Blocks = append(sa.req.Blocks, s); return nil })
-	pos, typed, err := parseArgs(flags, args)
+	pos, typed, err := parseArgs(flags, args, flagBlock)
 	if err != nil {
 		return sa, err
 	}

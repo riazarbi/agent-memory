@@ -2351,9 +2351,13 @@ exactly as it was.
     its links to the old stem dangle.
   - A move onto another device (a bound subtree) fails with the OS error and changes nothing. A
     node whose folder is a symlink has the link moved or renamed, not its target. Untested.
-- **Known gap, every verb** (CLI14 acceptance, 2026-11-21): a single-value flag given twice
-  takes the last value, silently (`merge x --into a --into b` merges into `b`), as `write`
-  always has. Not an error today.
+- **A flag given twice, every verb** (2026-11-21; was a known gap at CLI14's acceptance): a flag
+  that takes one value, or none, is refused when given a second time, under either spelling and
+  whether or not the values agree: `--into: given more than once`, naming the second as typed,
+  exit 1, nothing changed (`merge x --into a --into b` used to merge into `b`, silently). The
+  flags a verb takes many of still repeat: `write`'s `--tag`, `--property`, `--add` and
+  `--replace`, and `split`'s `--block`. After `--`, nothing is a flag. `--parent-dir` before the
+  verb has its own rule (III.1).
 - **Deleting does not rewrite links.** `delete` reports the links it leaves dangling, and `lint`
   reports them afterwards as warnings (III.7). The caller repairs them with `write --replace`.
   Rejected: refusing to delete a linked node (a dream could not remove a contradicted claim that
@@ -2669,13 +2673,15 @@ checks memory for problems, run it and deal with what it reports.
 - **The install commands remove the old prompt file.** Both READMEs' commands run
   `rm -f <state dir>/prompt/memory_usage.md`, so that following them cannot leave both prompt
   files in place.
-- **Open, for the operator: what the documented install grants.** The READMEs' commands copy
-  every file in `agent/tools/`, so an operator who follows them grants every restructuring verb,
-  `delete --recursive` included, to whatever agent reads that state dir, and is told to remove
-  the files they do not want. §4.6's default protocol gives the live agent read, write and
-  search, "never restructuring". Either the documented install becomes two steps (the base
-  tools, then the restructuring tools as an opt-in), or §4.6 changes. Not decided: the unit was
-  built unattended and this is the operator's choice.
+- **Settled by the operator (2026-11-21): `agent/tools/` is a library, and the documented
+  install copies all of it.** The folder ships a tool file for every verb; which of them an agent
+  gets is the operator's choice, made by removing files (or forbidding `--recursive`) after the
+  copy. §4.6's protocol, in which the live agent reads, writes and searches and only a dream
+  restructures, is the recommendation the operator applies when choosing, not something the
+  install enforces. Rejected: a two-step install with the restructuring tools as an opt-in.
+- **Accepted as built by the operator (2026-11-21):** a node made by `split` gets no tags and no
+  properties, and `merge` refuses a carried entry whose name is already taken in the target's
+  folder.
 - **Known gaps** (CLI15 acceptance): the README checks that name the skills match the install
   command line as well as the prose, so dropping a skill's name from the prose alone is not
   caught; several README checks pin wording by pattern.

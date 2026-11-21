@@ -88,7 +88,7 @@ func writeFlags(wa *writeArgs) *flag.FlagSet {
 
 func parseWriteArgs(args []string) (writeArgs, error) {
 	var wa writeArgs
-	pos, typed, err := parseArgs(writeFlags(&wa), args)
+	pos, typed, err := parseArgs(writeFlags(&wa), args, "tag", "property", flagAdd, flagReplace)
 	if err != nil {
 		return wa, err
 	}

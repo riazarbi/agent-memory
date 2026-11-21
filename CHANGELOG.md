@@ -3,6 +3,34 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-21 - A flag given twice is refused instead of silently taking the last value
+
+Closes the known gap recorded at CLI14's acceptance (spec III.8, "A flag given twice"). Before,
+`merge x --into a --into b` merged into `b` and said nothing; a model that assembles a call badly
+got a restructuring it did not ask for. A direct fix, not a delivery unit: one check in the shared
+parser.
+
+- `cmd/memory/args.go`: `parseArgs` refuses a flag set a second time with `<flag as typed>: given
+  more than once` (exit 1, nothing changed), under either spelling (`--into` then `-into`) and
+  even when the two values agree. It takes the names of the flags that may repeat. Booleans are
+  refused too (`--recursive --recursive`), so there is one rule and no exception to remember.
+  Trap: the flag package has already stored the second value when the check fires; that is
+  harmless only because the call stops there. Rejected: refusing only when the values differ (a
+  second rule, for no caller's benefit).
+- `cmd/memory/write.go`, `cmd/memory/split.go`: declare what repeats: `write`'s `--tag`,
+  `--property`, `--add`, `--replace`, and `split`'s `--block`. **Behaviour change for `write` and
+  `read`**, which have taken the last `--parent`, `--description`, `--block` or `--depth` since
+  they shipped. A repeated `--property` key still takes the last value.
+- `cmd/memory/unit_test.go`, `cmd/memory/split_merge_bin_test.go`: the parser's rule, and through
+  the built binary one refusal per verb that takes a flag, each checked to change nothing.
+- `docs/spec/agent-memory.md`: III.8's known gap becomes the rule. The same section records the
+  operator's decisions of this date: `agent/tools/` is a library and the documented install
+  copies all of it (the operator removes what an agent should not have); `split`'s new node
+  getting no tags or properties, and `merge` refusing a carried-entry name collision, are
+  accepted as built.
+- Not done: no change to the READMEs or the tool descriptions. None of them describes repeating
+  a single-value flag, and the tool descriptions are pinned to the spec byte for byte.
+
 ## 2026-11-21 - An agent can be given the restructuring verbs, is told on every turn only what memory is for, and learns how to use it from three skills
 
 CLI15, the last restructuring unit (spec III.8, "Tool files", "Tool descriptions" and "The prompt

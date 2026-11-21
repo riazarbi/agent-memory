@@ -595,3 +595,30 @@ func TestReadmeDocumentsSplitAndMerge(t *testing.T) {
 	status, _, _ := strings.Cut(readme[strings.Index(readme, "**Status:**"):], "\n")
 	mustContain(t, "the status line", status, "`split`", "`merge`")
 }
+
+// A flag that takes one value, given twice, is refused by every verb and
+// changes nothing (spec III.8, "A flag given twice"); the flags a verb takes
+// many of still repeat (newSMF's own writes repeat --tag and --add).
+func TestRepeatedFlagIsRefused(t *testing.T) {
+	f := newSMF(t)
+	for name, tc := range map[string]struct {
+		args []string
+		flag string
+	}{
+		"merge --into":        {[]string{"merge", "priya", "--into", "outbox-rules", "--into", "outbox-etiquette"}, "--into"},
+		"move --parent":       {[]string{"move", "priya", "--parent", "topics", "-parent", "people"}, "-parent"},
+		"move-block --to":     {[]string{"move-block", f.p1, "--to", "outbox-rules", "--to=outbox-etiquette"}, "--to"},
+		"delete --recursive":  {[]string{"delete", "outbox-rules", "--recursive", "--recursive"}, "--recursive"},
+		"delete --block":      {[]string{"delete", "priya", "--block", f.p1, "--block", f.p2}, "--block"},
+		"read --depth":        {[]string{"read", "priya", "--depth", "1", "--depth", "1"}, "--depth"},
+		"write --parent":      {[]string{"write", "newnode", "--parent", "topics", "--parent", "people", "--description", "d"}, "--parent"},
+		"write --description": {[]string{"write", "priya", "--description", "a", "--description", "b"}, "--description"},
+		"split --into": {[]string{"split", "priya", "--into", "a", "--into", "b", "--parent", "priya",
+			"--description", "d", "--block", f.p1}, "--into"},
+	} {
+		line := f.refused(t, tc.args...)
+		if !strings.Contains(line, tc.flag+": given more than once") {
+			t.Errorf("%s: stderr %q, want it to hold %q", name, line, tc.flag+": given more than once")
+		}
+	}
+}
