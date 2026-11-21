@@ -8,6 +8,9 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // The restructuring operations (docs/spec/agent-memory.md Part III.8): the
@@ -224,6 +227,7 @@ func bodyLines(n *Node) (lines []string, bodyStart int, runs []lineRun, err erro
 // changed: a restructuring call adjusts the fields it changes.
 func expectationOf(n *Node) (expectation, error) {
 	want := expectation{description: n.Description, tags: n.Tags, props: n.Properties}
+	want.modified, want.hasModified = modifiedField(n)
 	for _, b := range n.Blocks {
 		want.blocks = append(want.blocks, Block{ID: b.ID, Text: b.Text})
 	}
@@ -253,10 +257,19 @@ type noteChange struct {
 	tags *[]string
 }
 
+// content reports whether ch changes the note's content (III.9): it loses
+// a block, gains one, or gains a tag. Retargeted links alone are a
+// mechanical rewrite.
+func (ch noteChange) content() bool {
+	return len(ch.drops) > 0 || len(ch.adds) > 0 || ch.tags != nil
+}
+
 // rewritten returns n's folder note with ch applied. The output is loaded
 // through the folder-note parser before it is returned: it must read back
-// as the note it was, changed exactly as asked.
-func rewritten(n *Node, ch noteChange) ([]byte, error) {
+// as the note it was, changed exactly as asked. at is the time of the
+// call: a content change sets modified to it, and a mechanical rewrite
+// keeps the node's date (III.9).
+func rewritten(n *Node, ch noteChange, at time.Time) ([]byte, error) {
 	lines, bodyStart, runs, err := bodyLines(n)
 	if err != nil {
 		return nil, err
@@ -274,12 +287,14 @@ func rewritten(n *Node, ch noteChange) ([]byte, error) {
 		want.blocks[i].Text = applyCuts(n.Blocks[i].Text, cuts)
 	}
 	body, want.blocks = withoutBlocks(body, runs, want.blocks, ch.drops)
-	head := strings.Join(lines[:bodyStart], "")
+	var doc *yaml.Node
 	if ch.tags != nil {
-		if head, err = retaggedHead(n, *ch.tags); err != nil {
-			return nil, err
-		}
+		doc = rewriteFrontmatter(n, changeReq{tags: ch.tags})
 		want.tags = *ch.tags
+	}
+	head, err := stampedHead(n, doc, n.stampFor(ch.content(), at), &want)
+	if err != nil {
+		return nil, err
 	}
 	out := withLastBlocks(head, head+strings.Join(body, ""), n.LineEnding, ch.adds, &want)
 	if n.BOM {
@@ -316,15 +331,19 @@ func retargeting(n *Node, new string, match func(Edge) bool) (noteChange, int) {
 	return ch, count
 }
 
-// retaggedHead is n's frontmatter, delimiter lines included, re-emitted
-// with the tag list tags (D26), in the note's line ending.
-func retaggedHead(n *Node, tags []string) (string, error) {
-	fm, _, err := rewriteFrontmatter(n, changeReq{tags: &tags})
+// stampedHead is n's frontmatter, delimiter lines included, as a
+// restructuring call emits it (headWith): doc re-emitted when a field
+// changed, the source's bytes otherwise, with modified set to stamp unless
+// that is "". It records in want what modified must then read back as.
+func stampedHead(n *Node, doc *yaml.Node, stamp string, want *expectation) (string, error) {
+	head, err := headWith(n, doc, stamp)
 	if err != nil {
 		return "", fmt.Errorf("node %s: %w", n.Stem, err)
 	}
-	eol := n.LineEnding
-	return delimiter + eol + strings.ReplaceAll(fm, "\n", eol) + delimiter + eol, nil
+	if stamp != "" {
+		want.modified, want.hasModified = stamp, true
+	}
+	return head, nil
 }
 
 // withoutBlocks removes the blocks drops (ascending indices into runs and

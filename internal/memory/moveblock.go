@@ -3,6 +3,7 @@ package memory
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // MoveBlockResult is a successful move-block (Part III.8 "move-block,
@@ -46,7 +47,7 @@ func (w *Writer) MoveBlock(id, to string) (MoveBlockResult, error) {
 		return MoveBlockResult{}, err
 	}
 	// Every note is worked out before any is written.
-	edits, links, err := blockMoveEdits(st, from, idx, target)
+	edits, links, err := blockMoveEdits(st, from, idx, target, callTime())
 	if err != nil {
 		return MoveBlockResult{}, err
 	}
@@ -122,8 +123,9 @@ func blockHolder(st *Store, id string) (*Node, int, error) {
 // rewritten: from's note without the block, target's with it appended, and
 // in every note, those two included, each link to the block retargeted.
 // The moved block's own links to itself are rewritten in its text as it
-// moves, and counted.
-func blockMoveEdits(st *Store, from *Node, idx int, target *Node) ([]noteEdit, int, error) {
+// moves, and counted. The two notes have had a content change, dated at;
+// a note that only has links retargeted keeps its date (III.9).
+func blockMoveEdits(st *Store, from *Node, idx int, target *Node, at time.Time) ([]noteEdit, int, error) {
 	moved := from.Blocks[idx]
 	toBlock := func(e Edge) bool { return e.Stem == from.Stem && e.Block == moved.ID }
 	var edits []noteEdit
@@ -139,7 +141,7 @@ func blockMoveEdits(st *Store, from *Node, idx int, target *Node) ([]noteEdit, i
 		case count == 0:
 			continue
 		}
-		data, err := rewritten(n, ch)
+		data, err := rewritten(n, ch, at)
 		if err != nil {
 			return nil, 0, fmt.Errorf("moving block %s: %w", moved.ID, err)
 		}

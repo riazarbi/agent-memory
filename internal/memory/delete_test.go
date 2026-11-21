@@ -43,8 +43,10 @@ func mustDelete(t *testing.T, dir string, req DeleteRequest) DeleteResult {
 // A block delete removes the paragraph and the blank lines that separated
 // it, and copies every other byte: line endings, a byte-order mark, runs of
 // blank lines elsewhere, ID-less paragraphs (not adopted), a missing final
-// newline.
+// newline. The one byte range it adds: the note lost content, so it is dated
+// with the time of the call, as the last line of its frontmatter (III.9).
 func TestDeleteBlock_Bytes(t *testing.T) {
+	atCallTime(t)
 	cases := map[string]struct{ src, id, want string }{
 		"middle of blank-line runs": {
 			fm + "\n\nA. ^m-aaaaa1\n\n\nB. ^m-bbbbb1\n\nC. ^m-ccccc1\n", "m-bbbbb1",
@@ -100,8 +102,8 @@ func TestDeleteBlock_Bytes(t *testing.T) {
 				t.Fatal(err)
 			}
 			res := mustDelete(t, dir, DeleteRequest{Stem: "x", Block: c.id})
-			if got := string(fileBytes(t, dir, "x/x.md")); got != c.want {
-				t.Errorf("x.md\n got %q\nwant %q", got, c.want)
+			if got, want := string(fileBytes(t, dir, "x/x.md")), stamped(c.want, callText); got != want {
+				t.Errorf("x.md\n got %q\nwant %q", got, want)
 			}
 			if res.Nodes != 0 || res.Blocks != 1 || len(res.Dangling) != 0 {
 				t.Errorf("result %+v, want 0 nodes, 1 block, no dangling", res)

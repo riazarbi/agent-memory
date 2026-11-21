@@ -30,6 +30,11 @@ const (
 	flagReplace = "replace"
 )
 
+// modifiedKey is the property only memory sets: the date a note's content
+// last changed (Part III.9). --property refuses it, by exact name, before
+// the store is looked at; Modified is an ordinary property.
+const modifiedKey = "modified"
+
 // blockArg is the argument that asked for one block: an --add, or a
 // --replace with the ID it names.
 type blockArg struct {
@@ -93,6 +98,9 @@ func parseWriteArgs(args []string) (writeArgs, error) {
 		return wa, err
 	}
 	wa.typed = typed
+	if _, set := wa.req.Properties[modifiedKey]; set {
+		return wa, fmt.Errorf("%s: %q is set by memory", wa.flagName("property"), modifiedKey)
+	}
 	switch len(pos) {
 	case 0:
 		return wa, errors.New("STEM: write needs the stem of the node to create or update")

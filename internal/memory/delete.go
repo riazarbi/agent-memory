@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // DeleteRequest is one delete (Part III.8 "delete, exactly"): with Block,
@@ -82,7 +83,7 @@ func (w *Writer) deleteBlock(st *Store, n *Node, id string) (DeleteResult, error
 	if idx < 0 {
 		return DeleteResult{}, fieldErr("block", "no block %q in node %s", id, n.Stem)
 	}
-	data, err := withoutBlock(n, idx)
+	data, err := withoutBlock(n, idx, callTime())
 	if err != nil {
 		return DeleteResult{}, err
 	}
@@ -97,9 +98,10 @@ func (w *Writer) deleteBlock(st *Store, n *Node, id string) (DeleteResult, error
 // withoutBlock returns n's folder note without block idx: its source lines
 // are removed together with the blank lines that separated it from the
 // next block (or, for the last block, from what came before it). Every
-// other byte is copied.
-func withoutBlock(n *Node, idx int) ([]byte, error) {
-	return rewritten(n, noteChange{drops: []int{idx}})
+// other byte is copied, except the modified line: losing a block is a
+// content change, dated at (III.9).
+func withoutBlock(n *Node, idx int, at time.Time) ([]byte, error) {
+	return rewritten(n, noteChange{drops: []int{idx}}, at)
 }
 
 // brokenLinks lists the links a delete broke: every edge, in a block of a

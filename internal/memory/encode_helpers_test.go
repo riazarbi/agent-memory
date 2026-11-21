@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fixedRand is an ID source that draws exactly the given suffixes, then
@@ -104,4 +105,48 @@ func frontmatterRegion(t *testing.T, data []byte) string {
 	}
 	t.Fatalf("no closing delimiter in %q", s)
 	return ""
+}
+
+// clockText is the stored modified value of a content change made while
+// fixClock holds the clock (III.9).
+const clockText = "2026-11-21T14:03:07Z"
+
+// fixClock makes the time of every call clockText plus a fraction of a
+// second, so the modified line a content change writes is an exact string.
+func fixClock(t *testing.T) {
+	t.Helper()
+	old := now
+	now = func() time.Time { return time.Date(2026, 11, 21, 14, 3, 7, 400_000_000, time.UTC) }
+	t.Cleanup(func() { now = old })
+}
+
+// stamped is note with the line "modified: value" added as the last line of
+// its frontmatter, directly before the closing --- line and with the opening
+// --- line's ending: what III.9 makes of a note without the key when memory
+// changes its content (value the time of the call) or rewrites it
+// mechanically (value the file's prior mtime).
+func stamped(note, value string) string {
+	first := strings.Index(note, "\n")
+	if first < 0 {
+		panic("stamped: no frontmatter in " + note)
+	}
+	eol := "\n"
+	if first > 0 && note[first-1] == '\r' {
+		eol = "\r\n"
+	}
+	for i := first + 1; i < len(note); {
+		end := strings.Index(note[i:], "\n")
+		line := note[i:]
+		if end >= 0 {
+			line = note[i : i+end]
+		}
+		if isDelimiter(strings.TrimRight(line, "\r")) {
+			return note[:i] + "modified: " + value + eol + note[i:]
+		}
+		if end < 0 {
+			break
+		}
+		i += end + 1
+	}
+	panic("stamped: no closing --- in " + note)
 }

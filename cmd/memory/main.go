@@ -8,7 +8,11 @@
 // one line on stderr with exit 1, or exit 75 when retrying can succeed
 // (busy, changed on disk). lint alone exits 2,
 // its report on stdout, when the store has errors, unless given
-// --exit-zero (Part III.7). delete, retag, move, rename, move-block, split
+// --exit-zero (Part III.7). A node's date, the modified that read, search
+// and index show and order by, is the modified property stored in its
+// note, which only memory sets (a content change sets it to the time of
+// the call; a link rewrite or a retag keeps it), else the note's file time
+// (Part III.9). delete, retag, move, rename, move-block, split
 // and merge are the restructuring verbs (Part III.8): delete removes a
 // block, a node, or with --recursive a node and everything under it, and
 // reports the links it left dangling; retag renames or removes a tag
@@ -57,7 +61,9 @@ verbs:
         [--add TEXT]... [--replace ID=TEXT]...
                                         create or update a node; --add and
                                         --replace are its blocks, in order;
-                                        --parent / makes a top-level node
+                                        --parent / makes a top-level node;
+                                        --property modified=... is refused:
+                                        memory sets that key
   search QUERY                          search, in Obsidian search syntax (quote
                                         a query of several words)
   index                                 the index: top-level nodes, their
@@ -136,6 +142,12 @@ pass, creates memory/ and memory/notes/ when they are missing, and nothing
 else. write, delete, retag, move, rename, move-block, split and merge take
 the store's write lock; exit code 75 means busy or changed on disk: make
 the same call again.
+
+A node's date (modified) is the modified property stored in its note: the
+time its content last changed, in UTC, set only by memory. A content change
+sets it to the time of the call; a call that only rewrites links or a tag
+keeps it; a note without it takes its file's time. It is shown as a day in
+the process's time zone (TZ).
 `
 
 // verb runs one verb's arguments against the store at loc and returns its

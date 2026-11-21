@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"gopkg.in/yaml.v3"
 )
 
 // RetagResult is a successful retag: the tags as used (no leading '#'; New
@@ -210,7 +213,8 @@ func maskCuts(removed []bool) []cut {
 // it differs from the note as read. In the body only the tag tokens
 // change: each block is edited in its source lines, so line endings, the
 // way its ID is written and every untouched block stay byte for byte. A
-// changed tag list is re-emitted as any frontmatter change is (D26).
+// changed tag list is re-emitted as any frontmatter change is (D26). A
+// retag is a mechanical rewrite: the note keeps its date (III.9).
 func retagNote(n *Node, from, to string) ([]byte, bool, error) {
 	tags, tagsChanged := retagList(n.Tags, from, to)
 	lines, bodyStart, runs, err := bodyLines(n)
@@ -233,16 +237,16 @@ func retagNote(n *Node, from, to string) ([]byte, bool, error) {
 	if n.BOM {
 		out.WriteString(bomText)
 	}
+	var doc *yaml.Node
 	if tagsChanged {
-		head, err := retaggedHead(n, tags)
-		if err != nil {
-			return nil, false, err
-		}
-		out.WriteString(head)
+		doc = rewriteFrontmatter(n, changeReq{tags: &tags})
 		want.tags = tags
-	} else {
-		out.WriteString(strings.Join(lines[:bodyStart], ""))
 	}
+	head, err := stampedHead(n, doc, n.stampFor(false, time.Time{}), &want)
+	if err != nil {
+		return nil, false, err
+	}
+	out.WriteString(head)
 	out.WriteString(strings.Join(body, ""))
 	data := []byte(out.String())
 	if err := verifyOutput(data, want); err != nil {

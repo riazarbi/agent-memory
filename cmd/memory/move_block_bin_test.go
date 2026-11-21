@@ -103,11 +103,16 @@ func (f *blockF) moveP2(t *testing.T) (before map[string]fileState, r result) {
 func (f *blockF) p2Line() string { return bfP2 + " ^" + f.p2 + "\n" }
 
 // Acceptance criterion 1: the block moves with its ID and text, and
-// nothing else in either note changes.
+// nothing else in either note changes, but for each one's modified line,
+// which the move sets to the time of the call; the note with only a link
+// retargeted keeps the date it has, byte for byte (III.9).
 func TestMoveBlockMovesTheBlock(t *testing.T) {
 	t.Parallel()
 	f := newBlockF(t)
+	dateNote(t, f.priya, dfDate)
+	dateNote(t, f.cutover, dfDate)
 	oldPriya, oldCutover, oldRunbook := readText(t, f.priya), readText(t, f.cutover), readText(t, f.runbook)
+	start := callStart()
 	before, r := f.moveP2(t)
 
 	check(t, "result", decodeMoveBlock(t, r), xMoveBlock{
@@ -123,14 +128,14 @@ func TestMoveBlockMovesTheBlock(t *testing.T) {
 	// blank line, with P3's link target changed.
 	wantPriya := strings.Replace(oldPriya, f.p2Line()+"\n", "", 1)
 	wantPriya = strings.Replace(wantPriya, "[[priya#^"+f.p2+"]] is firm", "[[atlas-cutover#^"+f.p2+"]] is firm", 1)
-	check(t, "priya.md", readText(t, f.priya), wantPriya)
+	check(t, "priya.md", readText(t, f.priya), redatedBy(t, "priya.md", f.priya, wantPriya, start))
 	if strings.Contains(wantPriya, f.p2Line()) || !strings.Contains(oldPriya, f.p2Line()+"\n") {
 		t.Fatalf("the fixture does not exercise the removal: %q", oldPriya)
 	}
 	// atlas-cutover.md: its old bytes with C2's first link target changed,
 	// one blank line, then the block's line.
 	wantCutover := strings.Replace(oldCutover, "[[priya#^"+f.p2+"|the date]]", "[[atlas-cutover#^"+f.p2+"|the date]]", 1) + "\n" + f.p2Line()
-	check(t, "atlas-cutover.md", readText(t, f.cutover), wantCutover)
+	check(t, "atlas-cutover.md", readText(t, f.cutover), redatedBy(t, "atlas-cutover.md", f.cutover, wantCutover, start))
 	check(t, "atlas-runbook.md", readText(t, f.runbook), strings.Replace(oldRunbook, "[[priya#^", "[[atlas-cutover#^", 1))
 
 	// Nothing else is written: notes-misc and the starting tree keep
@@ -151,10 +156,15 @@ func TestMoveBlockDoesNotTidyTheTarget(t *testing.T) {
 		t.Fatalf("could not place the hand-written paragraph in %q", old)
 	}
 	writeFile(t, f.cutover, edited)
+	dateNote(t, f.cutover, dfDate)
+	edited = readText(t, f.cutover)
+	start := callStart()
 	f.moveP2(t)
 
+	// Every byte stays but the modified line, set to the time of the
+	// call: the note gained a block (III.9).
 	want := strings.Replace(edited, "[[priya#^"+f.p2+"|the date]]", "[[atlas-cutover#^"+f.p2+"|the date]]", 1) + "\n" + f.p2Line()
-	check(t, "atlas-cutover.md", readText(t, f.cutover), want)
+	check(t, "atlas-cutover.md", readText(t, f.cutover), redatedBy(t, "atlas-cutover.md", f.cutover, want, start))
 	n := readNode(t, f.dir, "atlas-cutover")
 	check(t, "atlas-cutover's blocks", blocksOf(n), []xBlock{
 		{ID: f.c1, Text: bfC1},

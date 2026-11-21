@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/riazarbi/agent-memory/internal/memory"
 )
@@ -90,6 +91,26 @@ func readText(t *testing.T, p string) string {
 		t.Fatal(err)
 	}
 	return string(data)
+}
+
+// callStart is the earliest value a call starting now can store as
+// modified: the current second, UTC (III.9).
+func callStart() time.Time { return time.Now().UTC().Truncate(time.Second) }
+
+// redatedBy is want, the bytes a note should hold, with its one modified
+// line carrying the value the note at p holds now. It first checks that
+// value is the time of a call made between start and now, so a note the
+// call was to date (III.9) but did not, or dated with anything else, fails.
+// A test dates the note in the past first (dateNote), so an unchanged line
+// cannot pass.
+func redatedBy(t *testing.T, what, p, want string, start time.Time) string {
+	t.Helper()
+	value := modifiedOf(t, p)
+	wantNow(t, what, value, start, time.Now().UTC())
+	if n := len(modifiedLineRE.FindAllString(want, -1)); n != 1 {
+		t.Fatalf("%s: the expected note holds %d modified lines, want 1:\n%s", what, n, want)
+	}
+	return modifiedLineRE.ReplaceAllLiteralString(want, "modified: "+value+"\n")
 }
 
 // lintOf is lint --exit-zero's report on f's store.
@@ -197,14 +218,18 @@ func noHiddenLeftovers(t *testing.T, notes string) {
 	}
 }
 
-// Acceptance criterion 1: a block is deleted and nothing else changes.
+// Acceptance criterion 1: a block is deleted and nothing else changes, but
+// for the note's modified line, which each delete sets to the time of its
+// call (III.9).
 func TestDeleteBlock(t *testing.T) {
 	t.Parallel()
 	f := newStoreF(t)
+	dateNote(t, f.outbox, dfDate)
 	ageTree(t, f.state)
 	before := snapshot(t, f.state)
 	old := readText(t, f.outbox)
 
+	start := callStart()
 	r := f.ok(t, "delete", "outbox-etiquette", "--block", f.a)
 	check(t, "stdout", r.stdout,
 		`<memory_delete stem="outbox-etiquette" block="`+f.a+`" nodes="0" blocks="1"></memory_delete>`+"\n")
@@ -213,18 +238,21 @@ func TestDeleteBlock(t *testing.T) {
 	if !strings.Contains(old, paragraph) {
 		t.Fatalf("fixture: %q is not in the note:\n%s", paragraph, old)
 	}
-	afterA := strings.Replace(old, paragraph, "", 1)
+	afterA := redatedBy(t, "outbox-etiquette.md after deleting <A>", f.outbox, strings.Replace(old, paragraph, "", 1), start)
 	check(t, "outbox-etiquette.md after deleting <A>", readText(t, f.outbox), afterA)
 	mustContain(t, "<B> keeps its ID and bytes", afterA, textB+" ^"+f.b+"\n")
 	sameFiles(t, before, snapshot(t, f.state), f.outbox)
 	noHiddenLeftovers(t, f.notes)
 
 	// Deleting the last block leaves an empty node, not a deleted one.
+	dateNote(t, f.outbox, "2026-02-01T09:00:00Z")
+	start = callStart()
 	r = f.ok(t, "delete", "outbox-etiquette", "--block", f.b)
 	check(t, "stdout", r.stdout,
 		`<memory_delete stem="outbox-etiquette" block="`+f.b+`" nodes="0" blocks="1"></memory_delete>`+"\n")
 	empty := readText(t, f.outbox)
-	check(t, "outbox-etiquette.md with no blocks", empty, strings.Replace(afterA, "\n"+textB+" ^"+f.b+"\n", "", 1))
+	check(t, "outbox-etiquette.md with no blocks", empty,
+		redatedBy(t, "outbox-etiquette.md with no blocks", f.outbox, strings.Replace(afterA, "\n"+textB+" ^"+f.b+"\n", "", 1), start))
 	if !strings.HasSuffix(empty, "---\n") {
 		t.Errorf("the emptied note does not end at its frontmatter:\n%s", empty)
 	}

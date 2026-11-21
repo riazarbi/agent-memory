@@ -3,6 +3,101 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-21 - A note stores the date its content last changed, and a link rewrite, a retag or a copy no longer makes an old note look new
+
+CLI16, spec III.9 (D34). A node's date was its folder note's mtime, which a link rewrite and any
+copy that drops file times reset. It is now the `modified` property in the note's frontmatter,
+which only `memory` sets. 37 existing tests pinned bytes or dates this unit supersedes; the builder
+listed them and left them, and the delivery lead edited them after the build (see Tests).
+
+- `internal/memory/modified.go` (new): everything about the property in one file. `readModified`
+  reads the scalar's *text* (RFC 3339 with `Z` or an offset; a date-time without one, seconds
+  optional, or a date, in the local zone), never yaml.v3's decoded timestamp, which takes an
+  offset-less value as UTC. `stampFor` is the rule: a content change gives the time of the call,
+  a mechanical rewrite keeps a readable value and otherwise writes the file's prior mtime.
+  `headWith` is the one place the line is written into a loaded note, called by the encoder and
+  by every restructuring verb, so both routes give the same bytes. The clock is the unexported
+  seam `now`; a call reads it once (`callTime`), so two notes one call changes carry one value.
+- The one-line edit (`stampRaw`): when no other frontmatter field changes, the `modified` key's
+  line is replaced where it stands, with whatever lines its old value took (a block list, a
+  literal block), or added directly before the closing `---`; every other byte is the source's.
+  The trap: the key cannot be located from yaml.v3's line numbers, because yaml.v3 counts a
+  U+2028 inside a literal block as a line break, which is exactly the edit-locked note the unit
+  must still date. So the line is found by text, at the mapping's indent, and the result is
+  parsed and compared with the frontmatter as read (same keys in order, same values, `modified`
+  equal to the stamp) before it is used. If the edit cannot be made or does not read back (a
+  flow mapping `{...}`, a key written `? modified`, an anchor on the old value that something
+  else aliases), the frontmatter is re-emitted with the key set instead. Rejected: re-emitting on
+  every content write (reflows layout, and locks the body of a note whose frontmatter cannot be
+  re-emitted: III.9).
+- `internal/memory/frontmatter.go`, `load.go`, `store.go`: `modified` is read into the node's
+  date (`Node.Modified`, still the one field `read`, `search` and `index` use), with the mtime
+  as fallback. It is typed as any property is, so a nested mapping is still an error; a value
+  that is not a date is the warning `modified: cannot be read as a date or date-time; the
+  file's time is used`, which `lint` reports as it reports every library problem (no change to
+  `lint`). `modified` is no longer listed in `Node.Properties`; `search '[modified:…]'` still
+  matches it, since search reads the frontmatter's fields.
+- `internal/memory/encode.go`, `rewrite.go`, `verify.go`: a new node's frontmatter ends with
+  `modified`. `EncodeChange` decides whether anything changes *before* it looks at the clock, so
+  repeating a write returns the file as read; when something does change it stamps the time of
+  the call, by the line edit (frontmatter otherwise untouched) or in the re-emitted document
+  (the key keeps its place, or goes last). The encoder's final check now also verifies what
+  `modified` reads back as. `rewriteFrontmatter` returns the document, not its text, so the
+  stamp is set in the same tree that is emitted. The encoder is no longer a pure function of its
+  arguments: it reads the clock.
+- `internal/memory/restructure.go`, `delete.go`, `moveblock.go`, `split.go`, `merge.go`,
+  `rename.go`, `retag.go`: `rewritten` takes the time of the call and dates a note that loses a
+  block, gains one, or gains a tag; a note that only has links retargeted, and every note a
+  `retag` rewrites, keeps its value or first gains it from its file's mtime. `split`'s new node
+  is dated as a create. `move` writes no note, and `rename` does not touch the renamed node's own
+  note unless it links to itself. A roll back restores bytes, so `modified` goes back with them.
+- `internal/memory/validate.go`, `cmd/memory/write.go`: the property key `modified` is refused,
+  by exact name (`Modified` is an ordinary property). The CLI refuses it while parsing its
+  arguments, as `--property: "modified" is set by memory`, exit 1, before the store is created
+  or locked; the library refuses the same request with a field error.
+- `cmd/memory/index.go`, `main.go`, `internal/memory/search.go`: no behaviour change (they already
+  order by `Node.Modified`); comments, the package comment and the usage text now say the date
+  is the stored value.
+- `agent/tools/memory_lint.json`: its description is III.7's amended text, which names the new
+  warning; generated from the spec's quoted lines, not retyped. **An existing install must copy
+  the file again.** Nothing else under `agent/` changed.
+- `README.md`: a new paragraph under Usage on a note's frontmatter and its date (what sets it,
+  what keeps it, the one-line edit, the formats read, the lint warning, and the advice to copy a
+  store with `cp -p` or `rsync -t` until every note carries the key); `write`'s refusal; the
+  `index` and `lint` paragraphs and the closing line on dates.
+- Tests: `internal/memory/modified_test.go` (new; the clock fixed through the seam) and
+  `cmd/memory/modified_bin_test.go` (new; the unit's eight acceptance criteria through the built
+  binary). Both sets were run against deliberately broken builds (the stored value ignored; an
+  offset-less value read as UTC; a write stamped before deciding; a mechanical rewrite stamped
+  with the time of the call; the frontmatter always re-emitted; a keyless note left keyless; the
+  key matched without case; local time written; a roll back skipped), each of which fails at
+  least one of them.
+- Docs and agent files checked for the old behaviour ("mtime", "the file's time", dates):
+  `README.md`, the usage text and package comment, `agent/tools/*.json`,
+  `agent/livecontext/memory_index.json`, `agent/prompt/memory_purpose.md`, the three skills.
+  **Amended at banking:** `agent/README.md`, spec III.6 and `CLAUDE.md` said the shipped
+  starting-tree notes are exactly what `memory write <stem> --parent / --description <D>`
+  creates. A create now writes `modified: <now>`, so each now says "but for the `modified`
+  line": the shipped notes have none and take their date from their files.
+- Existing tests edited by the delivery lead, not the builder (15 files: in `internal/memory`,
+  `encode_hardening_test.go`, `encode_helpers_test.go`, `encode_new_test.go`,
+  `encode_rewrite_test.go`, `delete_test.go`, `move_block_test.go`, `move_rename_test.go`,
+  `retag_test.go`, `root_test.go`, `split_merge_test.go`, `write_test.go`; in `cmd/memory`,
+  `move_block_bin_test.go`, `restructure_bin_test.go`, `split_merge_bin_test.go`,
+  `typology_bin_test.go`): each whole-note or key-list expectation gains the `modified` line,
+  exact where the clock is fixed, checked against the call's time window through the binary.
+  Two expectations are relaxed, both in `typology_bin_test.go`: the starting tree equals a
+  created note but for that one line, and the seeded-versus-written comparison strips the key
+  from the written tree first. Seven tests compared one call's note with another's and would
+  have failed whenever the two calls fell in different seconds; they no longer depend on time.
+- Deliberately not done: no migration verb (a keyless note gains the key when `memory` next
+  writes it); no new `lint` flag or problem beyond the reader's warning; no change to the other
+  tool descriptions, the purpose text or the skills.
+- Known limits: a note that is both edit-locked (D27) and written so the line edit cannot serve
+  it (a flow-mapping frontmatter, a `? modified` key) refuses body changes too, since neither
+  route can set the date. A failed restructuring call that rolls back gives a
+  keyless note it had replaced a new file time, so that note looks new (spec III.9, known gaps).
+
 ## 2026-11-21 - The capture skill asks for a claim's source, and the spec records why OKF was not adopted and what sharing memory would need
 
 From the review of the Open Knowledge Format (`docs/research/okf-recommendations.md`). Text and

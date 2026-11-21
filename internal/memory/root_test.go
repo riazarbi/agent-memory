@@ -47,7 +47,10 @@ func TestWrite_CreateUnderRoot(t *testing.T) {
 
 // CLI7 criterion 2 (library): an empty notes/ - no node at all - takes a
 // create under the root, which is the only create that can succeed there.
+// The clock is fixed, so the note and EncodeNew's output carry the same
+// modified line (III.9).
 func TestWrite_CreateUnderRootOnEmptyNotes(t *testing.T) {
+	atCallTime(t)
 	dir := t.TempDir()
 	w := writerFor(t, dir)
 	_, err := w.Write(WriteRequest{Stem: "kettle", Parent: "nope", Description: strp("d")})
@@ -68,8 +71,8 @@ func TestWrite_CreateUnderRootOnEmptyNotes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(fileBytes(t, dir, "kettle/kettle.md")); got != string(enc.Bytes) {
-		t.Errorf("kettle.md %q, want %q", got, enc.Bytes)
+	if got := string(fileBytes(t, dir, "kettle/kettle.md")); got != string(enc.Bytes) || got != "---\ndescription: d\nmodified: "+callText+"\n---\n" {
+		t.Errorf("kettle.md %q, want %q, dated %s", got, enc.Bytes, callText)
 	}
 }
 

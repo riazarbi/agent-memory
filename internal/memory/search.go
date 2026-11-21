@@ -23,7 +23,7 @@ type Result struct {
 }
 
 // Search returns the nodes q matches, ranked: most hit blocks first, then
-// the newest folder note (mtime at full precision), then stem.
+// the newest node (the node's date, III.9, at full precision), then stem.
 func Search(st *Store, q *Query) []Result {
 	var out []Result
 	for _, n := range st.Nodes() {

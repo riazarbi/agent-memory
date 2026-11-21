@@ -46,6 +46,11 @@ func atlasTree(t *testing.T, extra map[string]string) string {
 	return writeTree(t, files)
 }
 
+// agedText is the mtime ageNotes gives, as a stored modified value: what
+// a mechanical rewrite writes into an aged note that has no modified key
+// (III.9).
+const agedText = "2020-01-02T03:04:05Z"
+
 // ageNotes sets every mtime under dir into the past, so a rewrite shows.
 func ageNotes(t *testing.T, dir string) {
 	t.Helper()
@@ -258,7 +263,9 @@ func renamedNotes(new string) (atlas, runbook, priya string) {
 
 // Rename renames the folder and its note where they are and rewrites the
 // target of every edge to the node, the node's own included; only those
-// bytes change, and notes holding no such link are not written.
+// bytes change, and notes holding no such link are not written. A note
+// rewritten for its links only keeps its date: these have no modified key,
+// so each is given its file's time, never the time of the call (III.9).
 func TestRename_RewritesEveryLinkForm(t *testing.T) {
 	dir := atlasTree(t, nil)
 	ageNotes(t, dir)
@@ -276,9 +283,9 @@ func TestRename_RewritesEveryLinkForm(t *testing.T) {
 		"people/people.md":                  fm,
 		"projects/projects.md":              fm,
 		"topics/topics.md":                  fm,
-		"people/cutover/cutover.md":         atlas,
-		"people/cutover/runbook/runbook.md": runbook,
-		"people/priya/priya.md":             priya,
+		"people/cutover/cutover.md":         stamped(atlas, agedText),
+		"people/cutover/runbook/runbook.md": stamped(runbook, agedText),
+		"people/priya/priya.md":             stamped(priya, agedText),
 		"topics/misc/misc.md":               miscNote,
 	})
 	for _, rel := range []string{"people/people.md", "projects/projects.md", "topics/topics.md", "topics/misc/misc.md"} {
@@ -318,13 +325,16 @@ func TestRename_NoLinksWritesNoNote(t *testing.T) {
 
 // Only link targets change: CRLF endings, a byte-order mark, an ID-less
 // paragraph, a link on a block's second line, a run of blank lines and a
-// missing final newline all survive. Two links in one block are two.
+// missing final newline all survive. Two links in one block are two. The
+// one line added is the note's date, taken from its file (III.9), last in
+// the frontmatter and in the note's line ending.
 func TestRename_KeepsEveryOtherByte(t *testing.T) {
 	src := bomText + "---\r\ndescription: d\r\nkind: hub  # kept\r\n---\r\n\r\n\r\n" +
 		"First line\r\nthen [[old]] and [[old|again]]. ^m-aaaaa1\r\n\r\n\r\n" +
 		"No ID here, see [[old#^m-aaaaa1]].\r\n\r\n" +
 		"Untouched [[other]] and `[[old]]`.   ^m-aaaaa3"
 	dir := writeTree(t, map[string]string{"old/old.md": src, "other/other.md": fm})
+	ageNotes(t, dir)
 	res, err := writerFor(t, dir).Rename("old", "brand-new")
 	if err != nil {
 		t.Fatal(err)
@@ -332,7 +342,7 @@ func TestRename_KeepsEveryOtherByte(t *testing.T) {
 	if res.Links != 3 {
 		t.Errorf("links rewritten = %d, want 3", res.Links)
 	}
-	want := bomText + "---\r\ndescription: d\r\nkind: hub  # kept\r\n---\r\n\r\n\r\n" +
+	want := bomText + "---\r\ndescription: d\r\nkind: hub  # kept\r\nmodified: " + agedText + "\r\n---\r\n\r\n\r\n" +
 		"First line\r\nthen [[brand-new]] and [[brand-new|again]]. ^m-aaaaa1\r\n\r\n\r\n" +
 		"No ID here, see [[brand-new#^m-aaaaa1]].\r\n\r\n" +
 		"Untouched [[other]] and `[[old]]`.   ^m-aaaaa3"
@@ -361,6 +371,7 @@ func TestRename_CarriesUnloadedFolder(t *testing.T) {
 // not counted: it was not rewritten.
 func TestRename_DanglingLinkToNewStemResolves(t *testing.T) {
 	dir := atlasTree(t, nil)
+	ageNotes(t, dir)
 	res, err := writerFor(t, dir).Rename("atlas", "go-live")
 	if err != nil {
 		t.Fatal(err)
@@ -369,7 +380,8 @@ func TestRename_DanglingLinkToNewStemResolves(t *testing.T) {
 		t.Errorf("links rewritten = %d, want 4 (the dangling [[go-live]] is not rewritten)", res.Links)
 	}
 	_, _, priya := renamedNotes("go-live")
-	if got := string(fileBytes(t, dir, "people/priya/priya.md")); got != priya {
+	// Relinked only, priya is dated from its file (III.9).
+	if got := string(fileBytes(t, dir, "people/priya/priya.md")); got != stamped(priya, agedText) {
 		t.Errorf("priya after the rename: %q", got)
 	}
 	for _, e := range mustNode(t, Load(dir), "priya").Edges() {

@@ -60,8 +60,11 @@ func mustMoveBlock(t *testing.T, dir, id, to string) MoveBlockResult {
 // target's last paragraph with its ID and text, and every link to it, and
 // nothing else, is retargeted. The target is not tidied: its ID-less
 // paragraph gets no ID and its run of blank lines stays. Notes holding no
-// link to the block are not written.
+// link to the block are not written. The two notes whose content changed
+// are dated with the time of the call; the note with only a link
+// retargeted, having no date, is given its file's (III.9).
 func TestMoveBlock_MovesAndRelinks(t *testing.T) {
+	atCallTime(t)
 	dir := blockTree(t, nil)
 	want := treeState(t, dir)
 	ageNotes(t, dir)
@@ -69,9 +72,9 @@ func TestMoveBlock_MovesAndRelinks(t *testing.T) {
 	if wantRes := (MoveBlockResult{From: "priya", To: "cutover", Links: 3}); res != wantRes {
 		t.Errorf("result %+v, want %+v", res, wantRes)
 	}
-	want["people/priya/priya.md"] = mbPriyaAfter
-	want["projects/cutover/cutover.md"] = mbCutAfter
-	want["projects/cutover/runbook/runbook.md"] = mbRunAfter
+	want["people/priya/priya.md"] = stamped(mbPriyaAfter, callText)
+	want["projects/cutover/cutover.md"] = stamped(mbCutAfter, callText)
+	want["projects/cutover/runbook/runbook.md"] = stamped(mbRunAfter, agedText)
 	wantTree(t, dir, want)
 	for _, rel := range []string{"topics/misc/misc.md", "people/people.md", "projects/projects.md", "topics/topics.md"} {
 		wantAged(t, dir, rel)
@@ -100,9 +103,13 @@ func TestMoveBlock_MovesAndRelinks(t *testing.T) {
 }
 
 // Moved back, the block is last in its old node, not where it was, and
-// the links follow it again.
+// the links follow it again. Both notes that lost and gained the block are
+// dated with the time of the calls; runbook, only relinked, keeps the date
+// the first move took from its file (III.9).
 func TestMoveBlock_RoundTrip(t *testing.T) {
+	atCallTime(t)
 	dir := blockTree(t, nil)
+	ageNotes(t, dir)
 	mustMoveBlock(t, dir, "m-ppppp2", "cutover")
 	res := mustMoveBlock(t, dir, "m-ppppp2", "priya")
 	if want := (MoveBlockResult{From: "cutover", To: "priya", Links: 3}); res != want {
@@ -110,14 +117,18 @@ func TestMoveBlock_RoundTrip(t *testing.T) {
 	}
 	want := blockTree(t, nil)
 	state := treeState(t, want)
-	state["people/priya/priya.md"] = fm + "\nPriya leads platform. ^m-ppppp1\n\nThe date in [[priya#^m-ppppp2]] is firm. ^m-ppppp3\n\n" + blockP2 + " ^m-ppppp2\n"
+	state["people/priya/priya.md"] = stamped(fm+"\nPriya leads platform. ^m-ppppp1\n\nThe date in [[priya#^m-ppppp2]] is firm. ^m-ppppp3\n\n"+blockP2+" ^m-ppppp2\n", callText)
+	state["projects/cutover/cutover.md"] = stamped(mbCutover, callText)
+	state["projects/cutover/runbook/runbook.md"] = stamped(mbRunbook, agedText)
 	wantTree(t, dir, state)
 }
 
 // The target is appended to by byte surgery: one blank line, the block,
 // one line ending, in the note's own line ending; every byte already
-// there stays.
+// there stays, and the note, having gained content, is dated with the time
+// of the call (III.9).
 func TestMoveBlock_TargetBytes(t *testing.T) {
+	atCallTime(t)
 	const src = fm + "\nMoved text. ^m-sssss1\n\nStays. ^m-sssss2\n"
 	crlf := func(s string) string { return strings.ReplaceAll(s, "\n", "\r\n") }
 	cases := map[string]struct{ src, target, want string }{
@@ -181,8 +192,8 @@ func TestMoveBlock_TargetBytes(t *testing.T) {
 			if want := (MoveBlockResult{From: "source", To: "target"}); res != want {
 				t.Errorf("result %+v, want %+v", res, want)
 			}
-			if got := string(fileBytes(t, dir, "target/target.md")); got != tc.want {
-				t.Errorf("target:\n   got %s\n  want %s", quote(got), quote(tc.want))
+			if got, want := string(fileBytes(t, dir, "target/target.md")), stamped(tc.want, callText); got != want {
+				t.Errorf("target:\n   got %s\n  want %s", quote(got), quote(want))
 			}
 			st := Load(dir)
 			if n := mustNode(t, st, "source"); len(n.Blocks) != 1 || n.Blocks[0].ID != "m-sssss2" {
@@ -192,8 +203,10 @@ func TestMoveBlock_TargetBytes(t *testing.T) {
 	}
 }
 
-// The old note loses the block exactly as delete --block removes it.
+// The old note loses the block exactly as delete --block removes it, and
+// is dated with the time of the call as delete --block dates it (III.9).
 func TestMoveBlock_OldNoteBytes(t *testing.T) {
+	atCallTime(t)
 	cases := map[string]struct{ src, id, want string }{
 		"middle of blank-line runs": {
 			fm + "\n\nA. ^m-aaaaa1\n\n\nB. ^m-bbbbb1\n\nC. ^m-ccccc1\n", "m-bbbbb1",
@@ -216,8 +229,8 @@ func TestMoveBlock_OldNoteBytes(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			dir := writeTree(t, map[string]string{"old/old.md": tc.src, "new/new.md": fm})
 			mustMoveBlock(t, dir, tc.id, "new")
-			if got := string(fileBytes(t, dir, "old/old.md")); got != tc.want {
-				t.Errorf("old note:\n   got %s\n  want %s", quote(got), quote(tc.want))
+			if got, want := string(fileBytes(t, dir, "old/old.md")), stamped(tc.want, callText); got != want {
+				t.Errorf("old note:\n   got %s\n  want %s", quote(got), quote(want))
 			}
 		})
 	}
@@ -226,6 +239,7 @@ func TestMoveBlock_OldNoteBytes(t *testing.T) {
 // A block that links to itself has that link retargeted as it moves, and
 // counted; moving a node's last block leaves the node, with no blocks.
 func TestMoveBlock_SelfLinkAndEmptiedNode(t *testing.T) {
+	atCallTime(t)
 	dir := blockTree(t, map[string]string{
 		"topics/misc/misc.md": fm + "\nNothing about Atlas here. ^m-nnnnn1\n\nThis claim, [[misc#^m-nnnnn2]], stands alone; not [[misc]] nor [[misc#^m-nnnnn1]]. ^m-nnnnn2\n",
 	})
@@ -242,7 +256,8 @@ func TestMoveBlock_SelfLinkAndEmptiedNode(t *testing.T) {
 	if n := mustNode(t, st, "misc"); len(n.Blocks) != 0 {
 		t.Errorf("misc still holds %+v", n.Blocks)
 	}
-	if got := string(fileBytes(t, dir, "topics/misc/misc.md")); got != fm {
+	// Emptied, the note is its frontmatter, dated by the move (III.9).
+	if got := string(fileBytes(t, dir, "topics/misc/misc.md")); got != stamped(fm, callText) {
 		t.Errorf("misc's note is %s", quote(got))
 	}
 	for _, p := range st.Problems() {
@@ -256,11 +271,14 @@ func TestMoveBlock_SelfLinkAndEmptiedNode(t *testing.T) {
 func TestMoveBlock_OnlyLinksToTheBlock(t *testing.T) {
 	const holder = fm + "\nEarly [[cutover#^m-ppppp2]], stray [[misc#^m-ppppp2]], twice [[priya#^m-ppppp2]] [[priya#^m-ppppp2|again]]. ^m-hhhhh1\n"
 	dir := blockTree(t, map[string]string{"topics/holder/holder.md": holder})
+	ageNotes(t, dir)
 	res := mustMoveBlock(t, dir, "m-ppppp2", "cutover")
 	if res.Links != 5 {
 		t.Errorf("links rewritten: %d, want 5 (links, not blocks or notes)", res.Links)
 	}
-	want := fm + "\nEarly [[cutover#^m-ppppp2]], stray [[misc#^m-ppppp2]], twice [[cutover#^m-ppppp2]] [[cutover#^m-ppppp2|again]]. ^m-hhhhh1\n"
+	// Only relinked, and with no date of its own, holder is given its
+	// file's (III.9).
+	want := stamped(fm+"\nEarly [[cutover#^m-ppppp2]], stray [[misc#^m-ppppp2]], twice [[cutover#^m-ppppp2]] [[cutover#^m-ppppp2|again]]. ^m-hhhhh1\n", agedText)
 	if got := string(fileBytes(t, dir, "topics/holder/holder.md")); got != want {
 		t.Errorf("holder:\n   got %s\n  want %s", quote(got), quote(want))
 	}

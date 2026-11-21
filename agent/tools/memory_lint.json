@@ -1,6 +1,6 @@
 {
   "command": "memory",
-  "description": "Check your durable memory for problems. Lists every problem in the store, each with the node's path and the reason. An error means that node, and everything under it, could not be loaded: it is missing from your memory until it is fixed, and your memory tools cannot fix it, so tell the operator. A warning means the node loaded but something is off: a link to a missing node (fix it by creating that node or rewriting the block), a block ID used twice, or a file that is not a node (tell the operator). errors=\"0\" warnings=\"0\" means the store is clean. Takes no arguments.",
+  "description": "Check your durable memory for problems. Lists every problem in the store, each with the node's path and the reason. An error means that node, and everything under it, could not be loaded: it is missing from your memory until it is fixed, and your memory tools cannot fix it, so tell the operator. A warning means the node loaded but something is off: a link to a missing node (fix it by creating that node or rewriting the block), a block ID used twice, a modified date that cannot be read (it is replaced the next time you change that node), or a file that is not a node (tell the operator). errors=\"0\" warnings=\"0\" means the store is clean. Takes no arguments.",
   "read_only": true,
   "prepend_args": [
     "--parent-dir",

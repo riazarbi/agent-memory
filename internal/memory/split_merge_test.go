@@ -113,8 +113,11 @@ func wantNoProblems(t *testing.T, dir string) *Store {
 
 // The named blocks arrive in the new node in the order given, with their
 // IDs; they leave the old note as a delete removes them; every link to
-// them, and nothing else, is retargeted; the new node has no tags.
+// them, and nothing else, is retargeted; the new node has no tags. The
+// split note and the new one are dated with the time of the call; the note
+// with only links retargeted, having no date, is given its file's (III.9).
 func TestSplit_MovesBlocksAndRelinks(t *testing.T) {
+	atCallTime(t)
 	withUmask(t, 0o077)
 	dir := smTree(t, nil)
 	want := treeState(t, dir)
@@ -123,10 +126,10 @@ func TestSplit_MovesBlocksAndRelinks(t *testing.T) {
 	if wantRes := (SplitResult{Path: "projects/cutover", Blocks: 2, Left: 2, Links: 3}); res != wantRes {
 		t.Errorf("result %+v, want %+v", res, wantRes)
 	}
-	want["people/priya/priya.md"] = smPriyaAfter
+	want["people/priya/priya.md"] = stamped(smPriyaAfter, callText)
 	want["projects/cutover"] = "dir"
-	want["projects/cutover/cutover.md"] = smCutover
-	want["topics/rules/rules.md"] = smRulesAfter
+	want["projects/cutover/cutover.md"] = stamped(smCutover, callText)
+	want["topics/rules/rules.md"] = stamped(smRulesAfter, agedText)
 	wantTree(t, dir, want)
 	for _, rel := range []string{"topics/misc/misc.md", "topics/etiquette/etiquette.md", "topics/rules/archive/archive.md", "projects/projects.md"} {
 		wantAged(t, dir, rel)
@@ -161,8 +164,11 @@ func TestSplit_LoadsClean(t *testing.T) {
 }
 
 // The new note is byte-equal to the one a write create with the same
-// description and block texts makes, each block carrying its own ID.
+// description and block texts makes at the same time of call, each block
+// carrying its own ID. The clock is fixed: both notes carry the time of
+// their call as modified (III.9).
 func TestSplit_NewNoteIsWhatAWriteCreates(t *testing.T) {
+	atCallTime(t)
 	dir := smTree(t, nil)
 	mustSplit(t, dir, cutoverSplit())
 	got, err := os.ReadFile(filepath.Join(dir, "projects", "cutover", "cutover.md"))
@@ -183,12 +189,18 @@ func TestSplit_NewNoteIsWhatAWriteCreates(t *testing.T) {
 	if string(got) != want {
 		t.Errorf("the new note is\n%q\nwant what write makes\n%q", got, want)
 	}
+	if dates := modifiedLines(string(got)); len(dates) != 1 || dates[0] != callText {
+		t.Errorf("the new note's modified lines are %q, want exactly %q", dates, callText)
+	}
 }
 
 // Each block leaves the old note as delete --block removes a block:
 // whichever blocks a split names, in whatever order, the old note is
-// byte-equal to the one that deleting them one by one leaves.
+// byte-equal to the one that deleting them one by one leaves at the same
+// time of call. The clock is fixed: either way the note is dated with the
+// time of the call (III.9).
 func TestSplit_OldNoteIsWhatDeletesLeave(t *testing.T) {
+	atCallTime(t)
 	// Irregular on purpose: runs of blank lines, CRLF endings, a
 	// hand-written paragraph, an ID on its own line, no final newline.
 	const messy = "---\r\ndescription: d\r\n---\r\n\r\n\r\nOne. ^m-bbbbb1\r\n\r\n\r\n\r\nTwo\r\nlines. ^m-bbbbb2\r\n\r\nHand-written.\r\n\r\nThree.\r\n^m-bbbbb3\r\n\r\n\r\nFour. ^m-bbbbb4"
@@ -225,6 +237,9 @@ func splitVersusDeletes(t *testing.T, files map[string]string, order []string) {
 	if got != want {
 		t.Errorf("split of %v leaves\n%q\ndeleting them leaves\n%q", order, got, want)
 	}
+	if dates := modifiedLines(strings.ReplaceAll(got, "\r\n", "\n")); len(dates) != 1 || dates[0] != callText {
+		t.Errorf("split of %v: the old note's modified lines are %q, want exactly %q", order, dates, callText)
+	}
 	if arrived := blockIDsOf(mustNode(t, Load(split), "tidy")); !reflect.DeepEqual(arrived, order) {
 		t.Errorf("the new node's blocks are %v, want the order given %v", arrived, order)
 	}
@@ -240,8 +255,9 @@ func reversed(in []string) []string {
 
 // The new node goes where the caller says: under the split node itself,
 // under one of its descendants, or at the root. A split may empty the
-// node, which stays.
+// node, which stays, dated with the time of the call (III.9).
 func TestSplit_DirectionsAndEmptiedNode(t *testing.T) {
+	atCallTime(t)
 	for parent, wantPath := range map[string]string{
 		"priya": "people/priya/cutover", RootParent: "cutover", "archive": "topics/rules/archive/cutover", "people": "people/cutover",
 	} {
@@ -266,20 +282,22 @@ func TestSplit_DirectionsAndEmptiedNode(t *testing.T) {
 	if n := mustNode(t, st, "priya"); len(n.Blocks) != 0 || len(n.Tags) != 2 {
 		t.Errorf("the emptied node has %d blocks and tags %v", len(n.Blocks), n.Tags)
 	}
-	if got := treeState(t, dir)["people/priya/priya.md"]; got != "---\ndescription: Priya\ntags: [platform, atlas]\n---\n" {
+	if got := treeState(t, dir)["people/priya/priya.md"]; got != "---\ndescription: Priya\ntags: [platform, atlas]\nmodified: "+callText+"\n---\n" {
 		t.Errorf("the emptied note is %q", got)
 	}
 }
 
 // A moved block keeps the reader warnings its text already had, and a
-// block that is only an ID arrives as its ID alone.
+// block that is only an ID arrives as its ID alone. The new note is dated
+// with the time of the call (III.9).
 func TestSplit_CarriesWarningsAndAnEmptyBlock(t *testing.T) {
+	atCallTime(t)
 	dir := smTree(t, map[string]string{
 		"topics/odd/odd.md": fm + "\nSee [[rules#Heading]] and ![[rules]]. ^m-ddddd1\n\n^m-ddddd2\n\nStays. ^m-ddddd3\n",
 	})
 	before := len(Load(dir).Problems())
 	mustSplit(t, dir, SplitRequest{Stem: "odd", New: "odder", Parent: "odd", Description: "d", Blocks: []string{"m-ddddd2", "m-ddddd1"}})
-	if got := treeState(t, dir)["topics/odd/odder/odder.md"]; got != fm+"\n^m-ddddd2\n\nSee [[rules#Heading]] and ![[rules]]. ^m-ddddd1\n" {
+	if got := treeState(t, dir)["topics/odd/odder/odder.md"]; got != stamped(fm+"\n^m-ddddd2\n\nSee [[rules#Heading]] and ![[rules]]. ^m-ddddd1\n", callText) {
 		t.Errorf("the new note is %q", got)
 	}
 	if after := len(Load(dir).Problems()); after != before {
@@ -497,8 +515,12 @@ func TestSplit_Lock(t *testing.T) {
 // order and as they were; its children and everything else in its folder
 // move under the kept node; every link to it is retargeted; the kept node
 // gains the tags it lacked and keeps its description and properties; the
-// folded-in node's folder is removed.
+// folded-in node's folder is removed. The kept note, having gained blocks
+// and a tag, is dated with the time of the call, modified last among its
+// re-emitted keys; the child, only relinked and without a date, is given
+// its file's (III.9).
 func TestMerge_FoldsBlocksChildrenLinksAndTags(t *testing.T) {
+	atCallTime(t)
 	dir := smTree(t, map[string]string{
 		"topics/rules/notes.txt":        "a stray file\n",
 		"topics/rules/Broken/broken.md": "a folder that does not load\n",
@@ -515,8 +537,8 @@ func TestMerge_FoldsBlocksChildrenLinksAndTags(t *testing.T) {
 	delete(want, "topics/rules/.DS_Store")
 	want = moved(want, "topics/rules", "topics/etiquette")
 	want["topics/etiquette"] = "dir"
-	want["topics/etiquette/etiquette.md"] = smEtiquetteAfter
-	want["topics/etiquette/archive/archive.md"] = smArchiveAfter
+	want["topics/etiquette/etiquette.md"] = stamped(smEtiquetteAfter, callText)
+	want["topics/etiquette/archive/archive.md"] = stamped(smArchiveAfter, agedText)
 	wantTree(t, dir, want)
 	for _, rel := range []string{"people/priya/priya.md", "topics/misc/misc.md", "topics/topics.md", "topics/etiquette/notes.txt", "topics/etiquette/Broken/broken.md"} {
 		wantAged(t, dir, rel)
@@ -555,9 +577,12 @@ func TestMerge_KeptNodeAsLoaded(t *testing.T) {
 }
 
 // The frontmatter is re-emitted only when a tag is added: with none, its
-// bytes stay, hand formatting and comment spacing included, and the blocks
-// are appended in the note's own line ending.
+// bytes stay, hand formatting and comment spacing included, but for the one
+// modified line a note that gained blocks is given, last and in the note's
+// line ending (III.9); and the blocks are appended in the note's own line
+// ending.
 func TestMerge_NoTagAddedKeepsFrontmatterBytes(t *testing.T) {
+	atCallTime(t)
 	const head = "---\r\ndescription:   Kept\r\ntags:   [ outbox,atlas ]\r\nkind: guide    # spaced\r\n---\r\n"
 	dir := smTree(t, map[string]string{
 		"topics/kept/kept.md": head + "\r\nKept claim. ^m-kkkkk1\r\n",
@@ -566,7 +591,8 @@ func TestMerge_NoTagAddedKeepsFrontmatterBytes(t *testing.T) {
 	if res.TagsAdded != 0 || res.Blocks != 3 {
 		t.Errorf("result %+v", res)
 	}
-	want := head + "\r\nKept claim. ^m-kkkkk1\r\n\r\nCc Priya on urgent replies. ^m-ooooo1\r\n\r\nHand-written, no ID.\r\n\r\nDates: [[priya#^m-ppppp2|the date]], [[priya#^m-ppppp3]], `[[priya#^m-ppppp2]]`. ^m-ooooo2\r\n"
+	const dated = "---\r\ndescription:   Kept\r\ntags:   [ outbox,atlas ]\r\nkind: guide    # spaced\r\nmodified: " + callText + "\r\n---\r\n"
+	want := dated + "\r\nKept claim. ^m-kkkkk1\r\n\r\nCc Priya on urgent replies. ^m-ooooo1\r\n\r\nHand-written, no ID.\r\n\r\nDates: [[priya#^m-ppppp2|the date]], [[priya#^m-ppppp3]], `[[priya#^m-ppppp2]]`. ^m-ooooo2\r\n"
 	if got := treeState(t, dir)["topics/kept/kept.md"]; got != want {
 		t.Errorf("the kept note is\n%q\nwant\n%q", got, want)
 	}
@@ -591,7 +617,10 @@ func TestMerge_NothingToFoldLeavesTheKeptNoteAlone(t *testing.T) {
 // A child merges up into its parent like any other merge: its own
 // children land beside it, and its link to the parent, which names no
 // folded-in node, moves with its text and is the parent's link to itself.
+// The parent, having gained a block, is dated with the time of the call
+// (III.9).
 func TestMerge_ChildIntoItsParent(t *testing.T) {
+	atCallTime(t)
 	dir := smTree(t, map[string]string{"topics/rules/archive/older/older.md": fm + "\nOlder still. ^m-lllll1\n"})
 	res := mustMerge(t, dir, "archive", "rules")
 	if want := (MergeResult{Blocks: 1, Children: 1, TagsAdded: 0, Links: 0}); res != want {
@@ -602,7 +631,7 @@ func TestMerge_ChildIntoItsParent(t *testing.T) {
 	if n := mustNode(t, st, "older"); n.Path != "topics/rules/older" {
 		t.Errorf("the grandchild is at %s", n.Path)
 	}
-	if got := treeState(t, dir)["topics/rules/rules.md"]; got != smRules+"\nOld rules, replaced by [[rules|the rules]]. ^m-aaaaa1\n" {
+	if got := treeState(t, dir)["topics/rules/rules.md"]; got != stamped(smRules+"\nOld rules, replaced by [[rules|the rules]]. ^m-aaaaa1\n", callText) {
 		t.Errorf("the parent's note is %q", got)
 	}
 	noTempFiles(t, dir)
@@ -746,21 +775,25 @@ func TestMerge_Lock(t *testing.T) {
 }
 
 // Split and merge undo each other: the blocks come back, last, and the
-// links follow them both ways.
+// links follow them both ways. priya, changed by both calls, is dated
+// with their time; rules, only relinked and back, is as it was but for
+// the date the split took from its file (III.9).
 func TestSplitThenMerge_RoundTrip(t *testing.T) {
+	atCallTime(t)
 	dir := smTree(t, nil)
+	ageNotes(t, dir)
 	mustSplit(t, dir, cutoverSplit())
 	res := mustMerge(t, dir, "cutover", "priya")
 	if want := (MergeResult{Blocks: 2, Children: 0, TagsAdded: 0, Links: 3}); res != want {
 		t.Errorf("result %+v, want %+v", res, want)
 	}
-	want := "---\ndescription: Priya\ntags: [platform, atlas]\n---\n\nPriya leads platform. ^m-ppppp1\n\nPrefers async updates. ^m-ppppp4\n\n" + smP3 + " ^m-ppppp3\n\nAtlas cutover is 2026-12-01. ^m-ppppp2\n"
+	want := "---\ndescription: Priya\ntags: [platform, atlas]\nmodified: " + callText + "\n---\n\nPriya leads platform. ^m-ppppp1\n\nPrefers async updates. ^m-ppppp4\n\n" + smP3 + " ^m-ppppp3\n\nAtlas cutover is 2026-12-01. ^m-ppppp2\n"
 	state := treeState(t, dir)
 	if got := state["people/priya/priya.md"]; got != want {
 		t.Errorf("priya.md is\n%q\nwant\n%q", got, want)
 	}
-	if got := state["topics/rules/rules.md"]; got != smRules {
-		t.Errorf("rules.md is\n%q\nwant it as it was\n%q", got, smRules)
+	if got, want := state["topics/rules/rules.md"], stamped(smRules, agedText); got != want {
+		t.Errorf("rules.md is\n%q\nwant it as it was, dated from its file\n%q", got, want)
 	}
 	if _, there := state["projects/cutover"]; there {
 		t.Error("the split-off node is still there")

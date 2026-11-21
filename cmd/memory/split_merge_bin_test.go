@@ -157,14 +157,18 @@ func noFolderNamed(t *testing.T, notes, name string) {
 
 // Acceptance criterion 1: split puts the named blocks, in argv order and
 // with their IDs, in a new node where the caller says, and rewrites every
-// link to them.
+// link to them. The split note and the new note carry the time of the call
+// as modified; the note with only links retargeted keeps the date it has,
+// byte for byte (III.9).
 func TestSplitMovesNamedBlocksIntoNewNode(t *testing.T) {
 	t.Parallel()
 	f := newSMF(t)
+	dateNote(t, f.priya, dfDate)
 	oldPriya, oldRules := readText(t, f.priya), readText(t, f.rules)
 	ageTree(t, f.state)
 	before := snapshot(t, f.state)
 
+	start := callStart()
 	r := f.okNoNewProblem(t, f.splitCall()...)
 	check(t, "stdout", r.stdout, `<memory_split from="priya" stem="atlas-cutover" parent="projects" path="projects/atlas-cutover" blocks="2" left="2" links_rewritten="3"></memory_split>`+"\n")
 
@@ -188,11 +192,13 @@ func TestSplitMovesNamedBlocksIntoNewNode(t *testing.T) {
 	if !strings.Contains(oldPriya, p2Para+p3Para) {
 		t.Fatalf("the fixture does not exercise the removal: %q", oldPriya)
 	}
-	check(t, "priya.md", readText(t, f.priya), strings.Replace(oldPriya, p2Para+p3Para, "", 1))
+	check(t, "priya.md", readText(t, f.priya),
+		redatedBy(t, "priya.md", f.priya, strings.Replace(oldPriya, p2Para+p3Para, "", 1), start))
 	check(t, "outbox-rules.md", readText(t, f.rules), strings.ReplaceAll(oldRules, "[[priya#^", "[[atlas-cutover#^"))
 
 	// atlas-cutover.md: what write makes of the same node on a scratch
-	// store, once its two assigned IDs are replaced by P3 and P2.
+	// store, once its two assigned IDs are replaced by P3 and P2 and its
+	// modified line carries the split's time of call, not the write's.
 	scratch, scratchNotes := seeded(t)
 	w := decodeWrite(t, runBin(t, scratch, nil, "write", "atlas-cutover", "--parent", "projects",
 		"--description", smDescr, "--add", newP3, "--add", smP2))
@@ -203,7 +209,7 @@ func TestSplitMovesNamedBlocksIntoNewNode(t *testing.T) {
 	want = strings.NewReplacer(w.Assigned[0], f.p3, w.Assigned[1], f.p2).Replace(want)
 	newDir := filepath.Join(f.notes, "projects", "atlas-cutover")
 	newNote := filepath.Join(newDir, "atlas-cutover.md")
-	check(t, "atlas-cutover.md", readText(t, newNote), want)
+	check(t, "atlas-cutover.md", readText(t, newNote), redatedBy(t, "atlas-cutover.md", newNote, want, start))
 	check(t, "the new folder's mode", fileMode(t, newDir).Perm(), os.FileMode(0o755))
 	check(t, "the new note's mode", fileMode(t, newNote).Perm(), os.FileMode(0o644))
 

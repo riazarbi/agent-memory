@@ -94,7 +94,7 @@ The agent lists each skill's name and description on every turn, and the body is
 
 ## The starting tree
 
-`memory/notes/` is an example, not a requirement: `memory` imposes no structure, and the store's structure is whatever its tree is. It holds four top-level nodes, each a description and no blocks, exactly as `memory write <stem> --parent / --description <D>` would create them: `user` (who the operator is and how they want work done), `projects` (ongoing efforts, goals, incidents and commitments), `people` (who is who, and how to deal with them) and `topics` (everything else worth knowing). Install it, edit it, make your own, or leave it out.
+`memory/notes/` is an example, not a requirement: `memory` imposes no structure, and the store's structure is whatever its tree is. It holds four top-level nodes, each a description and no blocks, as `memory write <stem> --parent / --description <D>` would create them, without the `modified` date a create writes: `user` (who the operator is and how they want work done), `projects` (ongoing efforts, goals, incidents and commitments), `people` (who is who, and how to deal with them) and `topics` (everything else worth knowing). Install it, edit it, make your own, or leave it out.
 
 To rearrange it, before or after installing, move folders around: a node is a folder holding `<folder>/<folder>.md`, whose frontmatter has a one-line `description`, so renaming, moving or deleting folders (in a file manager or Obsidian) reshapes the tree. Nothing the model reads names these nodes: the tool descriptions, the purpose text and the skills send it to the index (or a root read) to learn the structure, so a different tree needs no other edit.
 

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 )
 
 // MergeResult is a successful merge (Part III.8 "merge, exactly").
@@ -57,7 +58,7 @@ func (w *Writer) Merge(from, to string) (MergeResult, error) {
 		return MergeResult{}, err
 	}
 	// Every note is worked out before anything is written.
-	edits, res, err := mergeEdits(st, mg.from, mg.to)
+	edits, res, err := mergeEdits(st, mg.from, mg.to, callTime())
 	if err != nil {
 		return MergeResult{}, err
 	}
@@ -140,8 +141,10 @@ func (mg *merging) carry() error {
 // their new bytes, and the result's counts. In every note each link to
 // from is retargeted to to; to's note also gains from's blocks, their own
 // links retargeted, and the tags of from it lacks. from's note is not
-// edited: it goes with its folder.
-func mergeEdits(st *Store, from, to *Node) ([]noteEdit, MergeResult, error) {
+// edited: it goes with its folder. to's note has had a content change,
+// dated at, when it gains a block or a tag; a note that only has links
+// retargeted keeps its date (III.9).
+func mergeEdits(st *Store, from, to *Node, at time.Time) ([]noteEdit, MergeResult, error) {
 	res := MergeResult{Blocks: len(from.Blocks), Children: len(from.children)}
 	tags, added := unionTags(to.Tags, from.Tags)
 	res.TagsAdded = added
@@ -164,7 +167,7 @@ func mergeEdits(st *Store, from, to *Node) ([]noteEdit, MergeResult, error) {
 		if count == 0 && len(ch.adds) == 0 && ch.tags == nil {
 			continue
 		}
-		data, err := rewritten(n, ch)
+		data, err := rewritten(n, ch, at)
 		if err != nil {
 			return nil, MergeResult{}, fmt.Errorf("merging %s into %s: %w", from.Stem, to.Stem, err)
 		}

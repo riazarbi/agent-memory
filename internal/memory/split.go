@@ -179,6 +179,10 @@ func (w *Writer) splitTarget(st *Store, req SplitRequest) (string, error) {
 // moved blocks' own text included, each link to a moved block is
 // retargeted to the new node.
 func splitEdits(st *Store, n *Node, idxs []int, req SplitRequest) (note []byte, edits []noteEdit, links int, err error) {
+	// The split node and the new node have had a content change, dated
+	// the time of the call; a note that only has links retargeted keeps
+	// its date (III.9).
+	at := callTime()
 	moving := map[string]bool{}
 	for _, idx := range idxs {
 		moving[n.Blocks[idx].ID] = true
@@ -194,7 +198,7 @@ func splitEdits(st *Store, n *Node, idxs []int, req SplitRequest) (note []byte, 
 		case count == 0:
 			continue
 		}
-		data, err := rewritten(m, ch)
+		data, err := rewritten(m, ch, at)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("splitting %s: %w", n.Stem, err)
 		}
@@ -202,7 +206,7 @@ func splitEdits(st *Store, n *Node, idxs []int, req SplitRequest) (note []byte, 
 	}
 	// The new note: laid out as a create lays one out, each block with
 	// the ID it has and the reader warnings its text already had.
-	want := expectation{description: req.Description}
+	want := expectation{description: req.Description, modified: modifiedText(at), hasModified: true}
 	for _, idx := range idxs {
 		b := n.Blocks[idx]
 		text := applyCuts(b.Text, retargetCuts(b.Text, req.New, toMoved))

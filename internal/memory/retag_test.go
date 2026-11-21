@@ -23,11 +23,12 @@ func mustRetag(t *testing.T, dir, old, new string) RetagResult {
 	return res
 }
 
-// retagOne runs one retag on a store holding src as x/x.md and returns the
-// note afterwards.
+// retagOne runs one retag on a store holding src as x/x.md, its mtime set
+// by ageNotes, and returns the note afterwards.
 func retagOne(t *testing.T, src, old, new string) (string, RetagResult) {
 	t.Helper()
 	dir := writeTree(t, map[string]string{"x/x.md": src})
+	ageNotes(t, dir)
 	res := mustRetag(t, dir, old, new)
 	noTempFiles(t, dir)
 	return string(fileBytes(t, dir, "x/x.md")), res
@@ -35,7 +36,9 @@ func retagOne(t *testing.T, src, old, new string) (string, RetagResult) {
 
 // Only the tag token changes in block text: line endings, how the ID is
 // written, ID-less paragraphs (not adopted), blank-line runs, trailing
-// spaces and a missing final newline all stay.
+// spaces and a missing final newline all stay. A rewritten note keeps its
+// date: having no modified key, it is given its file's time, never the
+// time of the call (III.9); a note retag leaves alone gains nothing.
 func TestRetag_InlineBytes(t *testing.T) {
 	cases := map[string]struct{ src, old, new, want string }{
 		"rename, everything else copied": {
@@ -95,8 +98,12 @@ func TestRetag_InlineBytes(t *testing.T) {
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			got, res := retagOne(t, c.src, c.old, c.new)
-			if got != c.want {
-				t.Errorf("x.md\n got %q\nwant %q", got, c.want)
+			want := c.want
+			if c.src != c.want {
+				want = stamped(c.want, agedText)
+			}
+			if got != want {
+				t.Errorf("x.md\n got %q\nwant %q", got, want)
 			}
 			if wantNodes := map[bool]int{true: 1, false: 0}[c.src != c.want]; res.Nodes != wantNodes {
 				t.Errorf("nodes = %d, want %d", res.Nodes, wantNodes)
@@ -148,7 +155,8 @@ func TestRetag_Frontmatter(t *testing.T) {
 	}
 }
 
-// Only notes that change are written; the count is of those.
+// Only notes that change are written; the count is of those. Each written
+// note, having no date, is given its file's (III.9).
 func TestRetag_WritesOnlyChangedNotes(t *testing.T) {
 	files := map[string]string{
 		"a/a.md":     tagged("[old]", ""),
@@ -158,6 +166,7 @@ func TestRetag_WritesOnlyChangedNotes(t *testing.T) {
 		"c/stray.md": "#old in a file that is not a node",
 	}
 	dir := writeTree(t, files)
+	ageNotes(t, dir)
 	res := mustRetag(t, dir, "old", "new")
 	if res != (RetagResult{Old: "old", New: "new", Nodes: 2}) {
 		t.Errorf("result %+v", res)
@@ -166,8 +175,8 @@ func TestRetag_WritesOnlyChangedNotes(t *testing.T) {
 	for k, v := range files {
 		want[k] = v
 	}
-	want["a/a.md"] = tagged("[new]", "")
-	want["a/b/b.md"] = fm + "\nInline #new only. ^m-bbbbb1\n"
+	want["a/a.md"] = stamped(tagged("[new]", ""), agedText)
+	want["a/b/b.md"] = stamped(fm+"\nInline #new only. ^m-bbbbb1\n", agedText)
 	wantTree(t, dir, want)
 
 	// A tag nobody has, and NEW equal to OLD, write nothing.

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"time"
 )
 
 // RenameResult is a successful rename (Part III.8 "rename, exactly"): the
@@ -225,7 +226,9 @@ func relinked(n *Node, old, new string) ([]byte, int, error) {
 	if count == 0 {
 		return nil, 0, nil
 	}
-	out, err := rewritten(n, noteChange{cuts: blockCuts})
+	// Retargeted links only: a mechanical rewrite, which never takes the
+	// time of the call (III.9).
+	out, err := rewritten(n, noteChange{cuts: blockCuts}, time.Time{})
 	if err != nil {
 		return nil, 0, err
 	}
