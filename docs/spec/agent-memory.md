@@ -809,10 +809,12 @@ Rulings ratified at U5 banking (2026-11-15):
   (yaml.v3 mis-emits more than dates and numbers — `<<`, strings that are
   only line breaks).
 - **An untouched operator value that cannot be re-emitted faithfully** (e.g.
-  a literal block holding a raw U+2028) makes the encoder refuse any
+  a keep-chomped literal block, `note: |+`, whose one line is a bare U+2028;
+  most other literal blocks holding one round-trip or fail to load) makes the encoder refuse any
   frontmatter change to that node — safe, but that node's frontmatter is
   edit-locked until the operator fixes the value. Body-only changes are
-  unaffected (the frontmatter bytes are copied).
+  unaffected (the frontmatter bytes are copied, but for the `modified` line,
+  III.9).
 
 **Known limits:** store-wide ID uniqueness covers only nodes that loaded — an
 ID inside a node the reader skipped (malformed) is invisible and may be
@@ -1981,7 +1983,8 @@ changes it by rearranging folders.
   moving or deleting folders (in a file manager or Obsidian) reshapes the tree.
 - **The starting tree is a shipped example.** `agent/memory/notes/` holds four first-level nodes,
   each `<stem>/<stem>.md` byte-equal to what `memory write <stem> --parent / --description <D>`
-  creates: `user` ("Who the operator is and how they want work done"), `projects` ("Ongoing
+  creates, but for the `modified` line a create writes (III.9; the shipped notes carry none and
+  take their date from their files): `user` ("Who the operator is and how they want work done"), `projects` ("Ongoing
   efforts, goals, incidents and commitments"), `people` ("Who is who, and how to deal with them"),
   `topics` ("Everything else worth knowing"). The operator copies it, edits it, makes their own, or
   leaves it out. It is copied only into a store that does not exist yet:
@@ -2227,7 +2230,8 @@ exactly as it was.
   - `NEW` is created as `write NEW --parent P --description D` creates a node: the same checks
     on `NEW` (D28's create rules, as `rename`), on `P` and on `D`, the same folder, modes and
     note layout. Its note is byte-equal to the note a `write` create with one `--add` per moved
-    block would make, except that each block carries its own ID. It gets no tags and no
+    block would make, except that each block carries its own ID and the two calls' `modified`
+    values (III.9). It gets no tags and no
     properties: `STEM`'s are not copied (decided 2026-11-20 without the operator, for review;
     a `write --tag` afterwards sets them).
   - `P` may be `STEM` itself (the new node is its child), any node under it, or any other node.
@@ -2795,6 +2799,51 @@ and the wrong entries were dropped. Built as CLI16.*
     tie-break (stem). A clock set wrong writes a wrong value.
   - A value without an offset means a different instant under a different `TZ`.
 
+**Settled and open at CLI16's banking (2026-11-21).** Built as specified; all eight criteria
+verified. What the build settled where this section was silent:
+
+- **The time of the call** is read once per call, after the write lock is taken, so every note
+  one call changes carries one value.
+- **A write that only gives IDs to hand-written paragraphs** is a content change: the note is
+  dated now.
+- **The lines an old value took** are the key's line, the lines indented deeper than it
+  (comments among them) and, for a block list, the entries at the key's own indent. Blank lines
+  after the value and comments at the key's indent stay. A comment on the old `modified` line
+  goes with the line; on a D26 re-emission it is kept, as for any changed field (D27).
+  Frontmatter whose keys are all indented gets the new line at that indent.
+- **When the one-line edit cannot be made** (flow-mapping frontmatter `{…}`, a key written
+  `? modified`, an anchor on the old value that something else aliases), the frontmatter is
+  re-emitted with the key set, D26's layout caveats applying; values never change. The edited
+  frontmatter is always parsed and compared with the original before it is used.
+- **Reading is strict to the forms listed**, plus fractional seconds. Lower-case `t` or `z`, a
+  space-separated date-time with an offset, and YAML 1.1's looser timestamps are unreadable
+  (the warning).
+- **D25's property rules come first.** A `modified` holding what no property may hold (a nested
+  mapping, a list of mappings, `!!binary`) is still an error and the node is skipped; a key
+  given twice is still the "given twice" error. The warning is for values a property may hold.
+- **`modified` is not among a node's listed properties**; `search`'s `[modified:…]` still
+  matches it. `Modified` and any other spelling is an ordinary property (Obsidian will show it
+  beside `modified` as if it had the same name).
+- **The CLI's refusal is an argument error**, made before the store is created or locked. The
+  library's text is `properties["modified"]: "modified" is set by memory`.
+- **Index budget.** "Over by one entry" is reachable only through the byte budget: one line
+  over the line budget drops two entries, since the notice takes a line (§4.4).
+- **Superseded tests.** 37 existing tests pinned bytes or file-time dates; the delivery lead
+  edited them after the build (15 files), keeping every other exact assertion. Seven of them
+  had become dependent on two calls landing in one second and are now deterministic.
+- **Known gaps added.**
+  - A note that is both edit-locked (D27) and in a form the one-line edit cannot serve refuses
+    body changes too, which it accepted before III.9. Not reproduced by the verifier; reported
+    by the builder.
+  - A restructuring call that fails and rolls back restores bytes but not mtimes (III.8), so a
+    note without the key that it had replaced looks new afterwards: the defect this section
+    fixes, on the failure path, for keyless notes only.
+  - A keyless note has a date but `[modified:…]` does not find it.
+  - A hand-set value in the future or the far past is trusted, and orders the index and search
+    accordingly.
+  - `agent/tools/memory_write.json` does not tell the model that `--property modified=…` is
+    refused; the refusal's one line does.
+
 ## 5. Decisions
 
 Superseded decisions keep their number; the row says what changed and why.
@@ -2827,7 +2876,7 @@ Superseded decisions keep their number; the row says what changed and why.
 | D24 | Protocol bundle | A protocol is files: seed tree, `usage.md`, dream recipe(s), audit, tool grants, optionally a validator. What this design has worked out is the default bundle. A/B-testing protocols on store clones is a design goal (§4.6). Bundle location: `memory/protocol/`. |
 | D25 | Reading the store | The read model's rules for every file it may meet — walk, stems, collisions, frontmatter types, paragraphs-only bodies, block IDs, link forms, backlinks — with errors (node or subtree skipped) and warnings (loaded, reported). §4.2 *Reading the store*. |
 | D26 | Frontmatter round-trip | Hybrid: a write changing no frontmatter field copies its bytes exactly; one that changes fields re-emits from the YAML node tree, keeping every other property's value, type, tag, order, scalar form and comments. The read model keeps raw frontmatter text and each property's YAML nodes. §4.2 *Round-trip of frontmatter*. |
-| D27 | Encoding nodes | A pure encoder: crypto-random `m-` IDs unique store-wide; a fixed layout for new nodes; byte-identical output for an unchanged node; untouched blocks keep their exact lines; frontmatter changes re-emitted per D26 (tags replace, properties merge); BOM and line ending kept; validation before output; everything emitted reads back clean. §4.2 *Encoding nodes*. |
+| D27 | Encoding nodes | A pure encoder (but for the clock, since III.9: a change is stamped with the time of the call): crypto-random `m-` IDs unique store-wide; a fixed layout for new nodes; byte-identical output for an unchanged node; untouched blocks keep their exact lines; frontmatter changes re-emitted per D26 (tags replace, properties merge); BOM and line ending kept; validation before output; everything emitted reads back clean. §4.2 *Encoding nodes*. |
 | D28 | Writing to disk | An exclusive OS lock (`flock` on `notes/.write.lock`, bounded 10 s wait, then "busy — retry") serializes writes across processes; one writer per `notes/` per process; each write from a fresh full load; create vs update by stem existence (create: valid unused stem, description, a loaded parent, or the root `/` (CLI7); update: parent absent or matching); writes to skipped nodes refused; atomic temp-file-and-rename; refuse if the file changed on disk since it was read; read back through a full load and roll back on failure. §4.2 *Writing to disk*. |
 | D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: the guidance ships as `agent/prompt/memory_usage.md`, and since CLI7 nothing is seeded: a missing store is empty, and the starting tree ships as `agent/memory/notes/` (III.6); there is no `init`.)* |
 | D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. *(For the CLI, Part III supersedes the injection and the corrective error for a missing `notes/`: since CLI7 a missing `notes/` is an empty store, III.1.)* *(CLI10: an index with no node prints the trust line and `<empty>No nodes yet.</empty>`, III.2.)* |

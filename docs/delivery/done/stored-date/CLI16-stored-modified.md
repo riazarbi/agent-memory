@@ -171,3 +171,23 @@ Local only: Go toolchain, temp dirs. No network, no live agent.
   the file's prior mtime, as for a keyless note (III.9).
 - yaml.v3 decodes an unquoted timestamp without an offset as UTC. Read the scalar's text.
 - The library does not log, and takes no new dependency.
+
+## Post-verification notes (2026-11-21)
+- One build. The builder finished the whole unit instead of stopping at the first superseded
+  test, and listed 37 of them (30 failing always, 7 only when two calls fell in different
+  seconds). The delivery lead edited them against the finished build (15 files, listed in the
+  CHANGELOG entry); there was no second builder run. Operator accepted this.
+- Verifier: all eight criteria PASS through the real binary; 26 of 27 mutants killed, the
+  survivor equivalent (`.UTC()` applied twice). Gate green, vulnerability scan included.
+- Production: `internal/memory/modified.go` (new: reading, the stamp rule, the one-line edit,
+  the unexported clock seam `now`); `frontmatter.go`, `load.go`, `store.go`, `encode.go`,
+  `rewrite.go`, `verify.go`, `validate.go`, `restructure.go` and each restructuring verb's file;
+  `cmd/memory/write.go` (the refusal). Tests: `internal/memory/modified_test.go`,
+  `cmd/memory/modified_bin_test.go`.
+- Rulings and known gaps are in III.9, "Settled and open at CLI16's banking". Criterion wording
+  found loose by the verifier: criterion 1 alone cannot tell "today" from the stored date
+  (criteria 6 and 7 do); criterion 6's "oldest by either measure" is not literally possible, and
+  "over budget by one entry" is reachable only through the byte budget; criterion 2's
+  edit-locked fixture is `note: |+` followed by a line holding only U+2028.
+- Lesson: when a unit changes what every write emits, expect the superseded-test list to be
+  long and partly time-dependent; a single suite run does not find the flaky ones.

@@ -23,7 +23,7 @@ The library `internal/memory` was built inside the agent repo (`github.com/riaza
 - `agent/README.md`.
 - `agent/tools/*.json` (descriptions and `prepend_args`) and `agent/livecontext/memory_index.json`.
 - `agent/prompt/memory_purpose.md` and `agent/skills/*/SKILL.md`, which stay byte-equal to the spec's III.8 texts.
-- `agent/memory/notes/`, which stays byte-equal to what `memory write <stem> --parent / --description <D>` creates.
+- `agent/memory/notes/`, which stays byte-equal to what `memory write <stem> --parent / --description <D>` creates, but for the `modified` line a create writes (the shipped notes carry none).
 - The CHANGELOG entry, which names the docs and agent files checked.
 
 Before handing over, search all of these for the old behaviour (verb names, flags, error texts, exit codes). Tests pin some of it (the guidance and tool descriptions against the spec, the README install commands, the starting tree), not all, so a green gate does not prove the docs are current.
