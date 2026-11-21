@@ -3,6 +3,24 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-21 - The capture skill asks for a claim's source, and the spec records why OKF was not adopted and what sharing memory would need
+
+From the review of the Open Knowledge Format (`docs/research/okf-recommendations.md`). Text and
+documentation only: no Go changed.
+
+- `agent/skills/memory-capture/SKILL.md`, `docs/spec/agent-memory.md` (III.8, the skill's text):
+  one line added to "How to write it": when a claim rests on a file, a link, a message or a
+  person, say which. Why: a claim that names its source can be re-checked; one that does not can
+  only be believed or dropped. Plain prose, not an inline field, because nothing reads it but the
+  model. **An existing install must copy the skill again** to get the line.
+- `docs/spec/agent-memory.md` (§6, out of scope): the gaps a shared or replicated store would
+  have to close (no record of which agent wrote what; stem collisions, unserialised writes and
+  unrewritten links across stores; no merge strategy for replicas), and the OKF decision: not
+  adopted as the store format, with the conditions for revisiting. Recorded there too: a per-claim
+  review-by date is deferred to the audit's design, and needs no store change.
+- Not done: no smoke or binary test beyond the existing one that pins the skill file to the
+  spec's text byte for byte, which covers this line.
+
 ## 2026-11-21 - A flag given twice is refused instead of silently taking the last value
 
 Closes the known gap recorded at CLI14's acceptance (spec III.8, "A flag given twice"). Before,

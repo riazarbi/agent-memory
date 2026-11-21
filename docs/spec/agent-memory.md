@@ -483,8 +483,11 @@ Related: [[escalation]], [[people#^m-22be7q]]. ^m-0d4e9x
 - **Dropped: `type`.** The harness assigns no type. If a protocol's first
   level is a type ontology, reading a node's type from its first-level
   ancestor is that protocol's convention (D19).
-- **Not stored: `modified`.** The harness renders mtime onto the wire;
-  storage keeps only what only the model knows.
+- **Stored: `modified`** (III.9, operator ruling 2026-11-21, reversing "Not
+  stored: `modified`. The harness renders mtime onto the wire; storage keeps
+  only what only the model knows"). The file's time turned out not to be the
+  content's age: it is reset by a link rewrite and by any copy that drops
+  file times.
 - **Not structural: `status`, `source`.** Claim status and provenance are
   a verification protocol's conventions, written as inline fields on
   blocks (§4.6).
@@ -585,7 +588,8 @@ its subtree) out of the store; a **warning** loads it and reports.
 - Files are read as UTF-8; a leading byte-order mark and CRLF line endings are
   tolerated. An unreadable folder note or folder → **error** for that node
   (and its subtree) only.
-- A node's `modified` is its folder note's mtime.
+- A node's `modified` is its stored `modified` property when that can be
+  read as a date, else its folder note's mtime (III.9).
 
 **Frontmatter** — the file must start with a `---` YAML block holding a
 mapping; missing or unparseable → **error**. Obsidian-lenient where Obsidian
@@ -672,7 +676,8 @@ Properties are carried through untouched (D23), so a write must not alter
 what it was not asked to change. The rule is a hybrid:
 
 - **A write that changes no frontmatter field** (e.g. appending or replacing
-  a block) copies the frontmatter bytes exactly as read.
+  a block) copies the frontmatter bytes exactly as read, except the one
+  `modified` line (III.9).
 - **A write that changes fields** re-emits the frontmatter from its YAML node
   tree, changing only those fields. Every other property keeps its value,
   type, YAML tag, key order, quoting and scalar form — a date stays a date
@@ -771,7 +776,7 @@ before any output is produced:
 - `description`: empty, or not a single line;
 - a tag not in Obsidian tag syntax (a leading `#` is stripped first);
 - a property key that is empty or multi-line, or `description`/`tags`
-  passed as properties;
+  passed as properties, or the key `modified` (III.9);
 - a property value that is not a string, number, boolean, null, or list of
   strings (nested objects, lists of non-strings);
 - block text that is empty, spans more than one paragraph (contains a blank
@@ -1119,7 +1124,7 @@ indent two spaces):
   nested one level (depth 2), as `memory_read` renders child entries:
   `<node stem tags children modified>description</node>` — `tags` comma
   joined and omitted when empty, `children` the node's true child count,
-  `modified` the folder note's mtime as `YYYY-MM-DD` in `AGENT_TIMEZONE`.
+  `modified` the node's date (III.9) as `YYYY-MM-DD` in `AGENT_TIMEZONE`.
   Children in the store's order.
 - Then `<omitted nodes="N">…</omitted>` when the budget dropped entries.
 - Then `<tags>`: tags across every loaded node with node counts,
@@ -1132,7 +1137,7 @@ indent two spaces):
 **The budget.** The rendered `<memory_index>` element, from `<memory_index>`
 to `</memory_index>` inclusive, may hold at most **200 lines and 25,000
 bytes**. Over either, entries are dropped one at a time until both hold:
-second-level entries first, oldest first (by the folder note's mtime, ties
+second-level entries first, oldest first (by the node's date, III.9, ties
 by stem), then first-level entries in the same order. The trust line, the
 notice and `<tags>` are never dropped, and the notice counts towards the
 budget. A parent's `children` keeps the true count, so a gap is visible
@@ -1470,7 +1475,7 @@ of such an alternative matches. A node matched only by its stem,
 description, tags, path or properties has no hit blocks.
 
 **Ranking and caps.** Matching nodes are ordered by number of hit blocks
-(most first), then folder-note mtime at full precision (newest first),
+(most first), then the node's date (III.9) at full precision (newest first),
 then stem. At most 20
 nodes are shown; each shows its hit blocks in file order, at most 5.
 
@@ -2062,7 +2067,8 @@ skips what it cannot load (D25), and a skipped node silently disappears from `re
   > path and the reason. An error means that node, and everything under it, could not be loaded: it
   > is missing from your memory until it is fixed, and your memory tools cannot fix it, so tell the
   > operator. A warning means the node loaded but something is off: a link to a missing node (fix it
-  > by creating that node or rewriting the block), a block ID used twice, or a file that is not a
+  > by creating that node or rewriting the block), a block ID used twice, a modified date that
+  > cannot be read (it is replaced the next time you change that node), or a file that is not a
   > node (tell the operator). errors="0" warnings="0" means the store is clean. Takes no arguments.
 
   It never mentions exit 75 (`lint` cannot be busy) or `--exit-zero`. Installing it is optional,
@@ -2612,6 +2618,8 @@ records of finished work; secrets.
   "this one", "the one we discussed" into dates and names.
 - For a rule, say why it holds and when it applies.
 - Mark your own interpretation as yours, not as fact.
+- When a claim rests on a file, a link, a message or a person, say which, so
+  it can be checked again later.
 - Search before adding: update the existing note rather than starting a second.
 - File it under the node it belongs to, as the index shows the tree — don't
   hunt for a deep location. Start a new top-level node only when nothing in
@@ -2710,6 +2718,83 @@ guidance text and "their exact shape is open"), §4.6 ("the first level is the o
 §6 ("restructuring operations' shape"). Part II's `memory/protocol/usage.md` was already
 superseded by III.4.
 
+## III.9 The stored `modified` date (operator ruling 2026-11-21)
+
+*Agreed with the operator on 2026-11-21, after the OKF review
+(`docs/research/okf-recommendations.md`) showed the file's time is not the content's age: with
+every note dated 2026-01-15, one `rename` gave two other notes today's date though only a link in
+them had changed, and a `git clone` gave every note today's date. The date is shown to the model,
+decides which entries the index drops first and breaks ties in search, so old notes looked new
+and the wrong entries were dropped. Built as CLI16.*
+
+- **The property.** A folder note may carry `modified` in its frontmatter: the time its content
+  last changed. `memory` writes it as UTC to the second, unquoted, on one line:
+  `modified: 2026-11-21T14:03:00Z` (a YAML timestamp; an Obsidian date-and-time property).
+- **A node's date** is the stored value when the note has one that can be read, else the folder
+  note's mtime. Everything that used the mtime uses the node's date: the `modified` attribute in
+  `read`, `search` and `index` output, the index's dropping order, and search's tie-break.
+- **What can be read** (lenient, so that a value kept by an Obsidian plugin or typed by the
+  operator works): a single scalar that is an RFC 3339 date-time with `Z` or an offset; a
+  date-time without an offset (`2026-11-21T14:03:00`, `2026-11-21 14:03`, seconds optional), taken
+  in the process's local time zone, as Obsidian writes them; or a date (`2026-11-21`), taken as
+  the start of that day in the local time zone. Quoted or not. Anything else (other text, a
+  number, a list, an empty value) is a **warning** (D25; operator ruling 2026-11-21): the node
+  loads, the value is carried, the node's date is the mtime, and `lint` reports, against the
+  node's path, `modified: cannot be read as a date or date-time; the file's time is used`. The
+  next content change or mechanical rewrite of that note by `memory` replaces the value and so
+  clears the warning.
+- **Only `memory` sets it.** `write --property modified=…` is refused before anything is
+  written: `--property: "modified" is set by memory`, exit 1. The library refuses the same
+  request. Hand edits may change it; nothing checks them.
+- **A content change sets it to the time of the call** (UTC, cut to the second), on each note
+  whose content the call changes:
+  - `write` creating a node; `write` changing a node's description, tags, properties or blocks.
+  - `delete --block`: the note that lost the block.
+  - `move-block`: the note that lost the block and the note that gained it.
+  - `split`: the note that lost the blocks, and the new node.
+  - `merge`: `TO`, when its note gains a block or a tag.
+- **A mechanical rewrite keeps the node's date.** A note that a call rewrites only to retarget
+  links (`rename`, `move-block`, `split`, `merge`) or to rename or remove a tag (`retag`) keeps
+  its stored value, byte for byte. If it has none, or one that cannot be read, the call writes
+  `modified` holding the mtime the file had before the call (UTC, cut to the second), so the
+  note's date is the same day after the call as before it. A note a call both changes and
+  rewrites links in has had a content change.
+- **Nothing else touches it.** `move` writes no note. `rename` leaves the renamed node's own
+  date alone. Deleting a node writes no other note. A call that changes nothing writes nothing
+  (D28): whether a write changes anything is judged without `modified`, so repeating a write, or
+  replacing a block with its own text, leaves the note's bytes, mtime and date as they were. A
+  rolled-back call restores each note's bytes, `modified` included.
+- **Only that line changes.** When a call changes no other frontmatter field, the frontmatter
+  comes back byte for byte except `modified`: an existing `modified` key is replaced where it
+  stands, by the one line above, whatever form its old value had (quoted, a list, with a
+  comment); a note without the key gains the line as the last line of the frontmatter, directly
+  before the closing `---`. This holds for a note whose frontmatter cannot be re-emitted (D27's
+  edit-locked node): its body can still be changed, and its `modified` is set. When a call does
+  change another field, D26's re-emission applies and `modified` keeps its place among the keys,
+  or goes last if it is new. A new node's frontmatter is `description`, then `tags` and
+  properties as D27 lays them out, then `modified` last.
+- **It is a property like any other to `search`:** `[modified:2026-11]` matches its text as
+  written. `read` shows it only as the node's `modified` attribute.
+- **No migration.** A note without the key keeps the mtime as its date until `memory` next
+  writes it; an existing store gains the key note by note.
+- **Rejected.** Using the newer of the stored value and the mtime (a copy that drops file times
+  would make every note look new again, the defect this fixes). A lint warning when the mtime is
+  newer than the stored value (every note would warn after a clone). `retag` counting as a
+  content change (one tag rename would make every note carrying the tag look new). A migration
+  verb. Re-emitting the whole frontmatter on every content write (it reflows layout, D26, and
+  would lock the body of a note whose frontmatter cannot be re-emitted).
+- **Known gaps.**
+  - An edit made outside `memory` (Obsidian, an editor) does not update the stored value, so the
+    note looks older than it is until `memory` next changes it or the operator edits the value.
+    An Obsidian plugin that maintains a `modified` property closes this, since its formats are
+    read.
+  - A note without the key still takes its date from the file, so a copy that drops file times
+    (`git clone`, `cp` without `-p`) makes it look new. Copy with `cp -p` or `rsync -t` until
+    every note carries the key.
+  - Two changes in the same second carry the same value; order between them falls to the next
+    tie-break (stem). A clock set wrong writes a wrong value.
+  - A value without an offset means a different instant under a different `TZ`.
+
 ## 5. Decisions
 
 Superseded decisions keep their number; the row says what changed and why.
@@ -2748,6 +2833,7 @@ Superseded decisions keep their number; the row says what changed and why.
 | D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. *(For the CLI, Part III supersedes the injection and the corrective error for a missing `notes/`: since CLI7 a missing `notes/` is an empty store, III.1.)* *(CLI10: an index with no node prints the trust line and `<empty>No nodes yet.</empty>`, III.2.)* |
 | D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `read`, `write`, `search`, `index` and `lint` (CLI8, III.7), and the seven restructuring verbs of III.8 (D33); it seeds nothing, a missing store is empty, and no typology is built in (CLI7, III.6). The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1, 75 (retry) and, for `lint` only, 2 (errors found). There is no logging and no capability line. |
 | D33 | Restructuring, purpose and skills (III.8) | Seven verbs beyond `write`: `move`, `rename`, `move-block`, `split`, `merge`, `delete`, `retag`, each one locked call that adds no lint error, one tool file each. `split` states where the new node goes (`--parent`, required); `merge` unions tags and keeps the target's description; `delete` refuses a node with children without `--recursive` and reports the links it leaves dangling; only the root is fixed. The every-turn prompt becomes `memory_purpose.md` (what memory is for); how to consult, save and reorganise ship as the skills `memory-usage`, `memory-capture` and `memory-restructure`. Agreed 2026-11-20, built as CLI11–CLI15. |
+| D34 | The stored `modified` date (III.9) | A note's frontmatter carries `modified`, the UTC time its content last changed, set only by `memory`: to the time of the call on a content change, left alone (or first written from the file's time) on a link rewrite or `retag`. A node's date is that value, else the mtime. Reverses "Not stored: `modified`": the mtime was reset by link rewrites and by copies. Operator ruling 2026-11-21. |
 | D31 | `memory_search` | Opt-in built-in (catalogued, never seeded, no generation bump); one `query` argument in an Obsidian syntax subset (words, phrases, `-`, `OR`, `tag:`, `path:`, `file:`, `[property:value]`, no parentheses); per-node matching, hit blocks, ranking by hits then recency; 20 nodes / 5 blocks; XML via `encoding/xml`; `memory.searched`. §4.5 *`memory_search`, exactly*. |
 
 ## 6. Out of scope, deferred, open
@@ -2782,6 +2868,39 @@ Superseded decisions keep their number; the row says what changed and why.
   it is its own story.
 - Team, cloud-store, snapshot, or cross-`.agent` sync memory; any network
   surface.
+  What sharing would have to solve, recorded 2026-11-21 from the OKF review
+  (`docs/research/okf-recommendations.md`), as documentation only:
+  - **Several agents, one store, one machine** works today: writes are locked,
+    atomic and checked against changes made meanwhile (D28), and the operator
+    chooses each agent's tools. Missing: the store does not record which
+    agent wrote what.
+  - **A shared bank linked into several stores** has three gaps. A stem is
+    unique across a whole store, so a private node and a shared node with one
+    stem collide, and the later is skipped with its subtree (D25). Each store
+    has its own write lock, so two agents writing one shared note through
+    different stores are not serialised. And `rename`, `move-block`, `split`
+    and `merge` rewrite links only in the store that ran them, so links to a
+    shared node from other stores break.
+  - **Replicas on several machines** need a merge strategy: two replicas
+    appending to one note conflict in git, and two creating one stem collide.
+  - The trade-off underneath: store-wide stems make links survive any
+    reorganisation inside one store and keep paths away from the agent, and
+    they compose poorly across stores. If sharing becomes a goal, that is
+    the decision to revisit; stems qualified by their bank (`team:priya`)
+    are one option.
+- **The Open Knowledge Format (OKF) as the store format** (reviewed
+  2026-11-21, OKF v0.3; `docs/research/okf-recommendations.md`). It is a
+  format for exchanging knowledge between parties: identity and links are
+  by file path, every file needs a `type`, and it has no block addressing,
+  no write rules and no index budget. Adopting it would undo D25's stems
+  and III.8's cheap `move`. Revisit if a live OKF consumer appears or OKF
+  reaches 1.0; an export verb would come first. Taken from it: a stored
+  `modified` date (III.9) and the capture skill's line on naming a
+  claim's source. Deferred to the audit's design (P3): a per-claim
+  review-by date as an inline field, `[review_by:: 2026-12-31]`, with OKF's
+  rules (stale means check again, not false; never invent a date; an
+  unreadable date is never current). The store needs no change for it:
+  block text is opaque and the restructuring verbs carry it byte for byte.
 - Compaction (stays external by repo design) and summarisation pipelines.
 - Dream cadence tuning by access frequency or volatility.
 - **Procedural routing** (CC's skill-upkeep, generalised): lessons about

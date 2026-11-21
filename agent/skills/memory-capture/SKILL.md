@@ -24,6 +24,8 @@ records of finished work; secrets.
   "this one", "the one we discussed" into dates and names.
 - For a rule, say why it holds and when it applies.
 - Mark your own interpretation as yours, not as fact.
+- When a claim rests on a file, a link, a message or a person, say which, so
+  it can be checked again later.
 - Search before adding: update the existing note rather than starting a second.
 - File it under the node it belongs to, as the index shows the tree — don't
   hunt for a deep location. Start a new top-level node only when nothing in
