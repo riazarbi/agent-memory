@@ -152,3 +152,27 @@ rules, written out in III.8.
   `projects`, `people`, `topics` and "area" only.
 - Some comments in existing test files will read stale after this unit ("the four tool files",
   "placing usage.md"). Leave them: existing test files are not yours to edit.
+
+## Post-verification notes (2026-11-21)
+- First builder stopped at once, having changed nothing: `TestToolFilesSchema` pins the listing
+  of `agent/tools/` and was missing from the superseded list. The lock was amended (that test,
+  both spellings of `--recursive` in `forbidden_args`, criterion 4 running every example) and a
+  second builder built the unit in one pass.
+- Built: the seven tool files, `agent/prompt/memory_purpose.md` (`memory_usage.md` deleted), the
+  three skills, `agent/README.md`, `README.md`, the CHANGELOG entry, and three new test files
+  (`cmd/memory/restructure_tools_test.go`, `skills_test.go`, `agent_docs_test.go`). No file under
+  `internal/`, no production Go file, no existing test and no spec document changed (confirmed
+  with `git diff`; the other files under `agent/` were rewritten with identical bytes during the
+  builder's mutation checks).
+- The builder could not run `govulncheck` (blocked by the permission system) and the delivery
+  lead did not run it on its behalf. The verifier's own gate run included it: no
+  vulnerabilities. No Go code or dependency changed in this unit.
+- Verifier: all eight criteria PASS; all ten examples in the tool descriptions run through
+  their tool files and do what they say; 35 of 36 mutations caught (the survivor is README
+  prose naming a skill, satisfied by the install command line). `--recursive=true` and its
+  variants are refused by the binary, so the two `forbidden_args` entries are enough.
+- Delivery lead, at banking: the three skills load under the agent's real skill loader with no
+  error or warning.
+- Accepted by the delivery lead on the operator's standing instruction of 2026-11-20. Left open
+  for the operator in III.8: the documented install grants every restructuring tool by default,
+  against §4.6's default protocol.

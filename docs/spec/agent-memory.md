@@ -1609,7 +1609,7 @@ architecture:
   Claude Code-style correction: gather by suspicion (drift first, then
   narrow searches of evidence), fix drift and contradictions at the
   source, keep `Why:` lines as grounds. This is the part the corpus backs.
-- **`usage.md`** as in §4.5.
+- **The purpose text and the skills** as in III.8 (formerly `usage.md`, §4.5).
 
 ### Verification is a protocol, not a store feature (D10)
 
@@ -1905,7 +1905,8 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 
 - (CLI3) If the trust line, the notice and `<tags>` alone exceed the budget (50 very long tags),
   `index` drops every entry and prints the result over budget.
-- (CLI3) The four verb tools' descriptions (read, write, search, index) say exit 75 means "run
+- (CLI3; since CLI15 the seven restructuring tools' descriptions say it too, correctly, since
+  those verbs can return it) The four verb tools' descriptions (read, write, search, index) say exit 75 means "run
   again", though only `write` can return it. `memory_lint.json`'s does not (CLI9).
 - (CLI3) Re-running the release job on an already-released commit publishes a `.2` release with
   empty notes.
@@ -2006,7 +2007,7 @@ changes it by rearranging folders.
   - `memory_index.json`: "the top-level areas and their children" becomes "the top-level nodes and
     their children".
   - `livecontext/memory_index.json`: "its top-level areas" becomes "its top-level nodes".
-  - The guidance: §4.5's text as revised in this ruling.
+  - The guidance: §4.5's text as revised in this ruling. (Since CLI15 that text is III.8's purpose text and skills.)
 - **Supersedes** in Part II: the seeding paragraphs (§4.2 *Seeding and the ontology*, §4.5
   *Seeding*), the first-level rule in D28's create ("never the root"), and §4.6's "the first level is
   fixed", each revised in place.
@@ -2655,6 +2656,30 @@ reader of the original would otherwise miss it. If you have a tool that
 checks memory for problems, run it and deal with what it reports.
 ```
 
+### Settled and open at CLI15's banking (2026-11-21)
+
+- **Built as specified.** The seven tool files, `memory_purpose.md` and the three skills ship in
+  `agent/`, each pinned by a test to its text in this section. The three skills also load, with
+  no error or warning, under the agent's real loader (`internal/skills` in the agent repo,
+  checked by the delivery lead at banking; the repo's own test applies the rules written above).
+- **Examples in a description are examples.** The stems in the tool descriptions' examples
+  (`priya`, `atlas-cutover`, `outbox-etiquette`) do not name places to file things; the rule of
+  III.6 is about the starting tree's stems and the word "area". The purpose text and the skills
+  may say "people" as an English word, as the guidance always could.
+- **The install commands remove the old prompt file.** Both READMEs' commands run
+  `rm -f <state dir>/prompt/memory_usage.md`, so that following them cannot leave both prompt
+  files in place.
+- **Open, for the operator: what the documented install grants.** The READMEs' commands copy
+  every file in `agent/tools/`, so an operator who follows them grants every restructuring verb,
+  `delete --recursive` included, to whatever agent reads that state dir, and is told to remove
+  the files they do not want. §4.6's default protocol gives the live agent read, write and
+  search, "never restructuring". Either the documented install becomes two steps (the base
+  tools, then the restructuring tools as an opt-in), or §4.6 changes. Not decided: the unit was
+  built unattended and this is the operator's choice.
+- **Known gaps** (CLI15 acceptance): the README checks that name the skills match the install
+  command line as well as the prose, so dropping a skill's name from the prose alone is not
+  caught; several README checks pin wording by pattern.
+
 ### Units
 
 Built through `docs/delivery`, in this order; each verb's rules above are its unit's contract.
@@ -2715,7 +2740,7 @@ Superseded decisions keep their number; the row says what changed and why.
 | D28 | Writing to disk | An exclusive OS lock (`flock` on `notes/.write.lock`, bounded 10 s wait, then "busy — retry") serializes writes across processes; one writer per `notes/` per process; each write from a fresh full load; create vs update by stem existence (create: valid unused stem, description, a loaded parent, or the root `/` (CLI7); update: parent absent or matching); writes to skipped nodes refused; atomic temp-file-and-rename; refuse if the file changed on disk since it was read; read back through a full load and roll back on failure. §4.2 *Writing to disk*. |
 | D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: the guidance ships as `agent/prompt/memory_usage.md`, and since CLI7 nothing is seeded: a missing store is empty, and the starting tree ships as `agent/memory/notes/` (III.6); there is no `init`.)* |
 | D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. *(For the CLI, Part III supersedes the injection and the corrective error for a missing `notes/`: since CLI7 a missing `notes/` is an empty store, III.1.)* *(CLI10: an index with no node prints the trust line and `<empty>No nodes yet.</empty>`, III.2.)* |
-| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `read`, `write`, `search`, `index` and `lint` (CLI8, III.7); it seeds nothing, a missing store is empty, and no typology is built in (CLI7, III.6). The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1, 75 (retry) and, for `lint` only, 2 (errors found). There is no logging and no capability line. |
+| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `read`, `write`, `search`, `index` and `lint` (CLI8, III.7), and the seven restructuring verbs of III.8 (D33); it seeds nothing, a missing store is empty, and no typology is built in (CLI7, III.6). The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1, 75 (retry) and, for `lint` only, 2 (errors found). There is no logging and no capability line. |
 | D33 | Restructuring, purpose and skills (III.8) | Seven verbs beyond `write`: `move`, `rename`, `move-block`, `split`, `merge`, `delete`, `retag`, each one locked call that adds no lint error, one tool file each. `split` states where the new node goes (`--parent`, required); `merge` unions tags and keeps the target's description; `delete` refuses a node with children without `--recursive` and reports the links it leaves dangling; only the root is fixed. The every-turn prompt becomes `memory_purpose.md` (what memory is for); how to consult, save and reorganise ship as the skills `memory-usage`, `memory-capture` and `memory-restructure`. Agreed 2026-11-20, built as CLI11–CLI15. |
 | D31 | `memory_search` | Opt-in built-in (catalogued, never seeded, no generation bump); one `query` argument in an Obsidian syntax subset (words, phrases, `-`, `OR`, `tag:`, `path:`, `file:`, `[property:value]`, no parentheses); per-node matching, hit blocks, ranking by hits then recency; 20 nodes / 5 blocks; XML via `encoding/xml`; `memory.searched`. §4.5 *`memory_search`, exactly*. |
 
