@@ -22,7 +22,7 @@ The library `internal/memory` was built inside the agent repo (`github.com/riaza
 - `README.md`: the Usage section, the store paragraphs and the wiring guide.
 - `agent/README.md`.
 - `agent/tools/*.json` (descriptions and `prepend_args`) and `agent/livecontext/memory_index.json`.
-- `agent/prompt/memory_usage.md`, which stays byte-equal to the spec's §4.5 guidance text.
+- `agent/prompt/memory_purpose.md` and `agent/skills/*/SKILL.md`, which stay byte-equal to the spec's III.8 texts.
 - `agent/memory/notes/`, which stays byte-equal to what `memory write <stem> --parent / --description <D>` creates.
 - The CHANGELOG entry, which names the docs and agent files checked.
 

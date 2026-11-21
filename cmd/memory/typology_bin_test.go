@@ -428,7 +428,7 @@ func TestInstallNeverOverwritesAStore(t *testing.T) {
 			before := snapshot(t, mem)
 			runCommandsIn(t, run.dir, state, run.blocks)
 			sameSnapshot(t, before, snapshot(t, mem))
-			for _, f := range []string{"tools/memory_write.json", "prompt/memory_usage.md", "livecontext/memory_index.json"} {
+			for _, f := range []string{"tools/memory_write.json", "prompt/memory_purpose.md", "livecontext/memory_index.json"} {
 				if !exists(filepath.Join(state, filepath.FromSlash(f))) {
 					t.Errorf("%s: %s was not installed beside an existing store", name, f)
 				}
@@ -555,7 +555,7 @@ func TestShippedDescriptionsPresumeNoTypology(t *testing.T) {
 // "area" nor user, projects or topics; the READMEs file nothing under
 // topics, and README.md's Usage shows --parent /.
 func TestGuidanceAndReadmesPresumeNoTypology(t *testing.T) {
-	guidance, err := os.ReadFile(filepath.Join(repoRoot(t), "agent", "prompt", "memory_usage.md"))
+	guidance, err := os.ReadFile(filepath.Join(repoRoot(t), "agent", "prompt", "memory_purpose.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
