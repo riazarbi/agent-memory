@@ -129,18 +129,13 @@ func blockMoveEdits(st *Store, from *Node, idx int, target *Node) ([]noteEdit, i
 	var edits []noteEdit
 	links := 0
 	for _, n := range st.order {
-		ch := noteChange{cuts: make([][]cut, len(n.Blocks)), drop: noBlock}
-		count := 0
-		for i, b := range n.Blocks {
-			ch.cuts[i] = retargetCuts(b.Text, target.Stem, toBlock)
-			count += len(ch.cuts[i])
-		}
+		ch, count := retargeting(n, target.Stem, toBlock)
 		links += count
 		switch {
 		case n == from:
-			ch.drop = idx
+			ch.drops = []int{idx}
 		case n == target:
-			ch.add = &Block{ID: moved.ID, Text: applyCuts(moved.Text, retargetCuts(moved.Text, target.Stem, toBlock))}
+			ch.adds = []Block{{ID: moved.ID, Text: applyCuts(moved.Text, retargetCuts(moved.Text, target.Stem, toBlock))}}
 		case count == 0:
 			continue
 		}

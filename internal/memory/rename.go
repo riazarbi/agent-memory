@@ -225,7 +225,7 @@ func relinked(n *Node, old, new string) ([]byte, int, error) {
 	if count == 0 {
 		return nil, 0, nil
 	}
-	out, err := rewritten(n, noteChange{cuts: blockCuts, drop: noBlock})
+	out, err := rewritten(n, noteChange{cuts: blockCuts})
 	if err != nil {
 		return nil, 0, err
 	}

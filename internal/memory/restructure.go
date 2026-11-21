@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -234,22 +235,22 @@ func expectationOf(n *Node) (expectation, error) {
 	return want, nil
 }
 
-// noBlock is noteChange.drop when no block is removed.
-const noBlock = -1
-
 // noteChange is what a restructuring call does to one loaded folder note,
 // by byte surgery: every byte it does not name stays, so line endings, a
-// byte-order mark, ID-less paragraphs, runs of blank lines and the
-// frontmatter are as they were.
+// byte-order mark, ID-less paragraphs, runs of blank lines and (unless
+// tags is set) the frontmatter are as they were.
 type noteChange struct {
 	// cuts are the changes to each block's text, by block; nil for none.
 	cuts [][]cut
-	// drop is the block to remove, with the blank lines that separated
-	// it, or noBlock.
-	drop int
-	// add is a block (ID and Text) to append as the last paragraph, or
-	// nil.
-	add *Block
+	// drops are the blocks to remove, each with the blank lines that
+	// separated it, in ascending order; nil for none.
+	drops []int
+	// adds are blocks (ID and Text) to append as the last paragraphs, in
+	// order; nil for none.
+	adds []Block
+	// tags, if non-nil, replaces the frontmatter's tag list, which
+	// re-emits the frontmatter (D26).
+	tags *[]string
 }
 
 // rewritten returns n's folder note with ch applied. The output is loaded
@@ -266,26 +267,21 @@ func rewritten(n *Node, ch noteChange) ([]byte, error) {
 	}
 	body := append([]string(nil), lines[bodyStart:]...)
 	for i, cuts := range ch.cuts {
-		if len(cuts) == 0 || i == ch.drop {
+		if len(cuts) == 0 || slices.Contains(ch.drops, i) {
 			continue
 		}
 		cutBlock(body, runs[i], n.Blocks[i], cuts)
 		want.blocks[i].Text = applyCuts(n.Blocks[i].Text, cuts)
 	}
-	if ch.drop != noBlock {
-		from, to := dropRange(runs, ch.drop)
-		body = append(body[:from:from], body[to:]...)
-		want.blocks = append(want.blocks[:ch.drop:ch.drop], want.blocks[ch.drop+1:]...)
-	}
+	body, want.blocks = withoutBlocks(body, runs, want.blocks, ch.drops)
 	head := strings.Join(lines[:bodyStart], "")
-	out := head + strings.Join(body, "")
-	if ch.add != nil {
-		out = withLastBlock(head, out, len(want.blocks) > 0, n.LineEnding, *ch.add)
-		want.blocks = append(want.blocks, Block{ID: ch.add.ID, Text: ch.add.Text})
-		// The text arrives with the reader warnings it already had.
-		_, warnings := scanLinkSpans(ch.add.Text)
-		want.warnings = append(append([]string(nil), want.warnings...), warnings...)
+	if ch.tags != nil {
+		if head, err = retaggedHead(n, *ch.tags); err != nil {
+			return nil, err
+		}
+		want.tags = *ch.tags
 	}
+	out := withLastBlocks(head, head+strings.Join(body, ""), n.LineEnding, ch.adds, &want)
 	if n.BOM {
 		out = bomText + out
 	}
@@ -293,6 +289,72 @@ func rewritten(n *Node, ch noteChange) ([]byte, error) {
 		return nil, fmt.Errorf("node %s: %w", n.Stem, err)
 	}
 	return []byte(out), nil
+}
+
+// withLastBlocks appends each of adds to note as withLastBlock appends
+// one, and records in want that it must load back, with the reader
+// warnings its text already had.
+func withLastBlocks(head, note, eol string, adds []Block, want *expectation) string {
+	for _, b := range adds {
+		note = withLastBlock(head, note, len(want.blocks) > 0, eol, b)
+		want.blocks = append(want.blocks, Block{ID: b.ID, Text: b.Text})
+		_, warnings := scanLinkSpans(b.Text)
+		want.warnings = append(append([]string(nil), want.warnings...), warnings...)
+	}
+	return note
+}
+
+// retargeting is the change that gives the stem new to every link in n's
+// blocks that match picks, and the number of such links.
+func retargeting(n *Node, new string, match func(Edge) bool) (noteChange, int) {
+	ch := noteChange{cuts: make([][]cut, len(n.Blocks))}
+	count := 0
+	for i, b := range n.Blocks {
+		ch.cuts[i] = retargetCuts(b.Text, new, match)
+		count += len(ch.cuts[i])
+	}
+	return ch, count
+}
+
+// retaggedHead is n's frontmatter, delimiter lines included, re-emitted
+// with the tag list tags (D26), in the note's line ending.
+func retaggedHead(n *Node, tags []string) (string, error) {
+	fm, _, err := rewriteFrontmatter(n, changeReq{tags: &tags})
+	if err != nil {
+		return "", fmt.Errorf("node %s: %w", n.Stem, err)
+	}
+	eol := n.LineEnding
+	return delimiter + eol + strings.ReplaceAll(fm, "\n", eol) + delimiter + eol, nil
+}
+
+// withoutBlocks removes the blocks drops (ascending indices into runs and
+// blocks) from body, one after another, each as dropRange removes one
+// block from the blocks then left: the result is what deleting them one
+// at a time gives, in any order.
+func withoutBlocks(body []string, runs []lineRun, blocks []Block, drops []int) ([]string, []Block) {
+	if len(drops) == 0 {
+		return body, blocks
+	}
+	gone := make([]bool, len(body))
+	left := append([]lineRun(nil), runs...)
+	kept := append([]Block(nil), blocks...)
+	// Last first, so the indices still to come are not shifted.
+	for k := len(drops) - 1; k >= 0; k-- {
+		idx := drops[k]
+		from, to := dropRange(left, idx)
+		for i := from; i < to; i++ {
+			gone[i] = true
+		}
+		left = append(left[:idx], left[idx+1:]...)
+		kept = append(kept[:idx], kept[idx+1:]...)
+	}
+	out := make([]string, 0, len(body))
+	for i, line := range body {
+		if !gone[i] {
+			out = append(out, line)
+		}
+	}
+	return out, kept
 }
 
 // dropRange is the body lines to remove with block idx: its own, together
@@ -318,12 +380,10 @@ func dropRange(runs []lineRun, idx int) (from, to int) {
 // had none, and blank lines it already ends with are kept, in which case
 // none is added. A note with no blocks (hasBlocks false) gets the block
 // after its frontmatter, head, laid out as a write lays out a first block.
-// A block with no text is written as its ID alone.
+// A block with no text is written as its ID alone, and one with no ID
+// (a hand-written paragraph a merge carries) as its text alone.
 func withLastBlock(head, note string, hasBlocks bool, eol string, b Block) string {
-	para := "^" + b.ID + eol
-	if b.Text != "" {
-		para = renderBlock(b.Text, b.ID, eol)
-	}
+	para := paragraph(b, eol)
 	if !hasBlocks {
 		return withEnding(head, true, eol) + eol + para
 	}
@@ -332,4 +392,17 @@ func withLastBlock(head, note string, hasBlocks bool, eol string, b Block) strin
 		note += eol
 	}
 	return note + para
+}
+
+// paragraph is the block b as a write lays one out: its text, a space and
+// ^ID, every line ending in eol. A block with no text is its ID alone; a
+// block with no ID is its text alone.
+func paragraph(b Block, eol string) string {
+	switch {
+	case b.ID == "":
+		return strings.ReplaceAll(b.Text, "\n", eol) + eol
+	case b.Text == "":
+		return "^" + b.ID + eol
+	}
+	return renderBlock(b.Text, b.ID, eol)
 }

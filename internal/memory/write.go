@@ -293,10 +293,21 @@ func (w *Writer) create(st *Store, req WriteRequest) (WriteResult, error) {
 		return WriteResult{}, err
 	}
 	rel := path.Join(parentPath, req.Stem)
+	rollback, err := w.makeNode(rel, enc.Bytes)
+	if err != nil {
+		return WriteResult{}, err
+	}
+	return w.readBack(st, rel, req.Stem, w.notePath(rel), enc, true, rollback)
+}
+
+// makeNode makes the folder of a new node at rel (mode 0755) and writes
+// data as its folder note (mode 0644). On failure nothing is left. On
+// success it returns the roll back: the note, then the folder, removed.
+func (w *Writer) makeNode(rel string, data []byte) (rollback func() error, err error) {
 	folder := filepath.Join(w.dir, filepath.FromSlash(rel))
 	notePath := w.notePath(rel)
 	if err := makeFolder(folder, rel); err != nil {
-		return WriteResult{}, err
+		return nil, err
 	}
 	// Removing the folder fails, leaving it, if anything else is in it.
 	removeFolder := func() error { return os.Remove(folder) }
@@ -304,16 +315,15 @@ func (w *Writer) create(st *Store, req WriteRequest) (WriteResult, error) {
 		_, err := os.Lstat(notePath)
 		return errors.Is(err, fs.ErrNotExist)
 	}
-	if err := commit(notePath, enc.Bytes, noteMode, absent, func() { _ = removeFolder() }); err != nil {
-		return WriteResult{}, wrapCommit(err, rel, "(its folder note appeared while this write ran)")
+	if err := commit(notePath, data, noteMode, absent, func() { _ = removeFolder() }); err != nil {
+		return nil, wrapCommit(err, rel, "(its folder note appeared while this write ran)")
 	}
-	rollback := func() error {
+	return func() error {
 		if err := os.Remove(notePath); err != nil {
 			return err
 		}
 		return removeFolder()
-	}
-	return w.readBack(st, rel, req.Stem, notePath, enc, true, rollback)
+	}, nil
 }
 
 // newNodeOf is a create's request as the encoder takes it. A new node has

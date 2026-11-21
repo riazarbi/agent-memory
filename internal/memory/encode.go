@@ -90,24 +90,30 @@ func (e Encoder) EncodeNew(n NewNode) (Encoded, error) {
 		}
 		want.blocks = append(want.blocks, Block{ID: ids[i], Text: text})
 	}
+	out, err := newNote(want)
+	if err != nil {
+		return Encoded{}, err
+	}
+	return Encoded{Bytes: out, BlockIDs: ids}, nil
+}
+
+// newNote lays out a new node's folder note from what it must load back
+// as (D27 "A new node"), and checks that it does.
+func newNote(want expectation) ([]byte, error) {
 	fm, err := encodeYAML(newFrontmatter(want))
 	if err != nil {
-		return Encoded{}, fmt.Errorf("encoding frontmatter: %w", err)
+		return nil, fmt.Errorf("encoding frontmatter: %w", err)
 	}
 	var b strings.Builder
 	b.WriteString(delimiter + lf + fm + delimiter + lf)
 	rendered := make([]string, len(want.blocks))
 	for i, blk := range want.blocks {
-		rendered[i] = renderBlock(blk.Text, blk.ID, lf)
+		rendered[i] = paragraph(blk, lf)
 	}
 	if len(rendered) > 0 {
 		b.WriteString(lf + strings.Join(rendered, lf))
 	}
-	out, err := finish(b.String(), want)
-	if err != nil {
-		return Encoded{}, err
-	}
-	return Encoded{Bytes: out, BlockIDs: ids}, nil
+	return finish(b.String(), want)
 }
 
 const delimiter = "---"

@@ -99,7 +99,7 @@ func (w *Writer) deleteBlock(st *Store, n *Node, id string) (DeleteResult, error
 // next block (or, for the last block, from what came before it). Every
 // other byte is copied.
 func withoutBlock(n *Node, idx int) ([]byte, error) {
-	return rewritten(n, noteChange{drop: idx})
+	return rewritten(n, noteChange{drops: []int{idx}})
 }
 
 // brokenLinks lists the links a delete broke: every edge, in a block of a

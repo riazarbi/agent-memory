@@ -8,15 +8,17 @@
 // one line on stderr with exit 1, or exit 75 when retrying can succeed
 // (busy, changed on disk). lint alone exits 2,
 // its report on stdout, when the store has errors, unless given
-// --exit-zero (Part III.7). delete, retag, move, rename and move-block are
-// the restructuring verbs built so far (Part III.8): delete removes a
+// --exit-zero (Part III.7). delete, retag, move, rename, move-block, split
+// and merge are the restructuring verbs (Part III.8): delete removes a
 // block, a node, or with --recursive a node and everything under it, and
 // reports the links it left dangling; retag renames or removes a tag
 // across the store; move puts a node, with its subtree, under another
 // parent or the root, rewriting nothing; rename changes a node's stem and
 // rewrites every link to it; move-block moves one block to the end of
-// another node, keeping its ID, and rewrites every link to the block. It
-// never logs.
+// another node, keeping its ID, and rewrites every link to the block;
+// split moves named blocks of a node into a new node made where --parent
+// says, rewriting every link to them; merge folds one node into another -
+// its blocks, children, links and tags - and removes it. It never logs.
 package main
 
 import (
@@ -100,6 +102,29 @@ verbs:
                                         and every link to the block is
                                         rewritten; links_rewritten counts
                                         the links
+  split STEM --into NEW --parent P --description D --block ID [--block ID]...
+                                        split a node that covers two
+                                        subjects: create the node NEW under
+                                        P (/ for the top level, STEM itself
+                                        for a child) with the description D
+                                        and move the named blocks of STEM
+                                        into it, in the order given, with
+                                        their IDs; every link to a moved
+                                        block is rewritten; STEM stays where
+                                        it is with the other blocks; NEW
+                                        gets no tags; --parent is required:
+                                        there is no default place
+  merge FROM --into TO                  fold the node FROM into the node TO
+                                        and remove FROM: its blocks go to
+                                        the end of TO with their IDs, its
+                                        children and whatever else is in
+                                        its folder go under TO, every link
+                                        to FROM or its blocks is rewritten
+                                        to TO, and TO gains the tags of
+                                        FROM it lacks; TO keeps its own
+                                        description; TO cannot be FROM's
+                                        descendant (merge the child into
+                                        the parent instead)
 
 The store is <parent>/memory. The parent is --parent-dir DIR (or
 --parent-dir=DIR), given before the verb; else MEMORY_PARENT_DIR from the
@@ -108,8 +133,8 @@ directory. An empty --parent-dir, or a variable set but empty, is an error.
 After the verb, --parent-dir is not an option. The parent must already
 exist. A missing store is an empty one: every verb, once its arguments
 pass, creates memory/ and memory/notes/ when they are missing, and nothing
-else. write, delete, retag, move and rename take the store's write lock,
-and so does move-block; exit code 75 means busy or changed on disk: make
+else. write, delete, retag, move, rename, move-block, split and merge take
+the store's write lock; exit code 75 means busy or changed on disk: make
 the same call again.
 `
 
@@ -130,6 +155,8 @@ func verbs() map[string]verb {
 		"rename": renameVerb,
 		// The key is the verb as typed.
 		"move-block": moveBlockVerb,
+		"split":      splitVerb,
+		"merge":      mergeVerb,
 	}
 }
 

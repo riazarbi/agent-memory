@@ -234,12 +234,11 @@ func retagNote(n *Node, from, to string) ([]byte, bool, error) {
 		out.WriteString(bomText)
 	}
 	if tagsChanged {
-		fm, _, err := rewriteFrontmatter(n, changeReq{tags: &tags})
+		head, err := retaggedHead(n, tags)
 		if err != nil {
-			return nil, false, fmt.Errorf("node %s: %w", n.Stem, err)
+			return nil, false, err
 		}
-		eol := n.LineEnding
-		out.WriteString(delimiter + eol + strings.ReplaceAll(fm, "\n", eol) + delimiter + eol)
+		out.WriteString(head)
 		want.tags = tags
 	} else {
 		out.WriteString(strings.Join(lines[:bodyStart], ""))

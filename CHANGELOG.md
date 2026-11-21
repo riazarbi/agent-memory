@@ -3,6 +3,97 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-20 - A node that covers two subjects can be divided and two nodes about one subject joined, each in one call: `split` and `merge`
+
+CLI14, the fourth restructuring unit (spec III.8, "`split`, exactly" and "`merge`, exactly").
+With it all seven restructuring verbs exist in the binary. No tool file, skill or prompt text ships
+for them yet (CLI15): `agent/` is byte-for-byte unchanged, so no agent can call them until then,
+and `agent/README.md` and the shipped tool descriptions still say nothing can be deleted or
+cleared.
+
+- `internal/memory/split.go` (new): `Writer.Split(SplitRequest)`. Under the write lock and from a
+  fresh load it resolves the blocks, checks the new node as `write` checks a create (`checkCreate`,
+  unchanged, with its refusals renamed to the field `into`), works out every note, then makes the
+  new node (`makeNode`), replaces the changed notes (`replaceAll`), reloads and checks the store
+  with `unsound`. The new note is laid out by the encoder's own new-note code (`newNote`), so it
+  is byte-equal to what `write` creates, each block carrying the ID it already has; it gets no
+  tags and no properties. The old note loses the blocks by the same byte surgery `delete --block`
+  uses. Only edges whose stem is the split node *and* whose block is one of those moved are
+  retargeted, the moved blocks' own text included; `[[STEM]]` stays. Order of work, and why: the
+  new node is made *before* the old note is rewritten, so a crash part-way leaves the blocks in
+  both notes (a duplicate-ID lint warning), never in neither. Refusals, each a `FieldError`
+  naming `stem`, `into`, `parent`, `description` or `block`, or a `NoNodeError` for an unknown
+  stem or parent: what the arguments alone show (the root, an invalid new stem, a missing parent,
+  a bad description, no block, an empty ID, an ID given twice) is refused before the lock is
+  taken; then an unknown stem, a block not in the node, an ID more than one block carries (as
+  `move-block`), a new stem in use, an unknown parent, and whatever `checkCreate` refuses.
+  Decided where the spec is silent: an unknown `--parent` is a `NoNodeError` (near matches at the
+  CLI) rather than `write`'s "no node exists to create under" text; a loaded node's stem as `NEW`
+  gets its own message ("in use by the node at …"), because `checkCreate` would call it "a folder
+  the reader skipped (no problem reported)"; a moved block keeps the reader warnings its text
+  already had and a block that is only an ID arrives as `^ID`, as `move-block` does (the new note
+  is not run through `write`'s block-text validation: the text is already in the store).
+- `internal/memory/merge.go` (new): `Writer.Merge(from, to)`. One replace of the kept note can
+  carry three kinds of edit: the folded-in node's blocks appended (as `move-block` appends one),
+  its own links to that node retargeted, and the tag list re-emitted, only when a tag is added.
+  Then every entry of the folded-in folder except its note and dot-entries is renamed into the
+  kept node's folder (loaded children, folders that did not load, stray files), the folder is
+  renamed aside to `.<stem>.deleting`, the store reloaded and checked, and only then is the hidden
+  folder removed, as `delete` does. Notes are replaced *before* any folder moves, so their paths
+  are the ones loaded; the read-back after the reload looks for them where the move put them.
+  Refused: the root (before the lock), an unknown node, `TO` equal to `FROM` or under it, and an
+  entry that would move having the name of one already in `TO`'s folder (`lstat`, so it also
+  catches a name differing only by case on a case-insensitive filesystem). Decided where the spec
+  is silent: the collision names the field `into`; the folded-in note must still hold the bytes
+  that were read (`delete`'s edit-race check, exit 75) because it is discarded; a kept note that
+  gains nothing (no block, no tag, no link) is not written; a hand-written paragraph with no ID
+  in the folded-in node arrives as text with no ID ("IDs and text kept"); when the reload finds a
+  replaced note edited by something that does not take the lock, the call exits 75, rolls nothing
+  back and still removes the hidden folder, so the merge is complete on disk, as `rename`'s is.
+  Known gaps, not fixed: `delete`'s (the hidden folder that cannot be removed, the crash between
+  rename-aside and removal) and `rename`'s (restored notes carry new mtimes); a merge that would
+  give the kept note two blocks with one ID, or carry a hand-written paragraph ending in a stray
+  `^token`, is refused by the note check with the encoder's "reader warns about" text rather than
+  a message of its own; a crash between replacing notes and moving entries leaves links rewritten
+  and the folded-in node still there.
+- `internal/memory/restructure.go`: `noteChange` now takes several `drops`, several `adds` and
+  an optional tag list, where it took one block to drop and one to add; `rewritten` applies them.
+  Several drops are applied as deleting the blocks one at a time (`withoutBlocks`, built on the
+  unchanged `dropRange`), which is what "each block leaves the note as `delete --block` removes
+  one" needs: taking the union of single-drop ranges instead leaves a trailing blank run when the
+  last two blocks go. A test compares a split with one-by-one deletes for every subset of a
+  five-paragraph note, in both orders. `withLastBlock` writes a block with no ID as its text
+  alone (`paragraph`). `retargeting` and `retaggedHead` are lines lifted out of `moveblock.go`
+  and `retag.go`. No behaviour of `delete`, `retag`, `rename` or `move-block` changes: their
+  tests pass untouched.
+- `internal/memory/delete.go`, `moveblock.go`, `rename.go`, `retag.go`: call sites follow
+  `noteChange`'s new fields and the two lifted helpers. No behaviour change.
+- `internal/memory/encode.go`: `EncodeNew`'s layout is lifted into `newNote`, which `Split`
+  shares. `internal/memory/write.go`: `create`'s folder-and-note step is lifted into `makeNode`,
+  which `Split` shares, with its roll back. No behaviour change to `write`.
+- `cmd/memory/split.go`, `cmd/memory/merge.go` (new): the verbs. Argument errors name the
+  argument as typed (`STEM`, `FROM`, `--into`, `--parent`, `--description`, `--block`, or `-into`
+  when typed so) and come before the store is looked at: a missing positional, `/` as `STEM`,
+  `FROM`, `NEW` or `TO`, a missing flag (the first missing in usage order), an invalid `NEW`.
+  Results are `<memory_split from stem parent path blocks left links_rewritten>` and
+  `<memory_merge from stem blocks children tags_added links_rewritten>`. `merge`'s first
+  argument is named `FROM` in errors, as the spec's table names it, not `STEM`.
+- `cmd/memory/main.go`: both verbs registered; the usage text and package comment list them, and
+  the lock sentence now names every writing verb once (`write`, `delete`, `retag`, `move`,
+  `rename`, `move-block`, `split` and `merge`), replacing "… and so does move-block".
+- `README.md`: the Usage section documents both verbs with their results and refusals; the
+  status line, the lock-file sentences, the root paragraph and the exit-75 sentence list them.
+- Tests: `internal/memory/split_merge_test.go` (new) pins the bytes of every note, injects a
+  failure at each step of each verb (the new note, each replace, each entry move, the
+  rename-aside, the reload, an outside edit) and checks the lock; `cmd/memory/
+  split_merge_bin_test.go` and `split_merge_busy_bin_test.go` (new) run the unit's eight
+  acceptance criteria through the built binary.
+- Docs checked: spec III.8 (already amended in this unit's lock), the usage text and package
+  comment, `README.md`. Deliberately not touched, being CLI15's: `agent/README.md`,
+  `agent/tools/`, `agent/prompt/`, `agent/livecontext/`. Not changed and now stale: spec III.1's
+  list of verbs that take a lock file names five restructuring verbs, not `split` and `merge`
+  (the builder does not edit the spec).
+
 ## 2026-11-20 - A single block can change node: `move-block` moves it with its ID and rewrites every link to it, and `rename` refuses a new stem that `write` would refuse to create
 
 CLI13, the third restructuring unit (spec III.8, "`move-block`, exactly", and the paragraph of
