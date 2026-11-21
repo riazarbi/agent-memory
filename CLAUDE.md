@@ -1,6 +1,6 @@
 This repo is agent-memory: a long-term memory store for an AI agent, kept as a tree of markdown notes with YAML frontmatter. It is used as a standalone CLI, `memory`. An agent uses it through shell tools, and the operator decides where its index goes (a tool, a livecontext entry, the system prompt). The agent does not know memory exists; it sees only tool files.
 
-Its precedent is `adulting` (`github.com/riazarbi/adulting`): commands exposed as argv shell tools with rich descriptions. Everything an operator copies into an agent ships in this repo's `agent/` folder (tool files, the guidance, a live-context entry, an optional starting tree) and is installed by hand; see `agent/README.md`.
+Its precedent is `adulting` (`github.com/riazarbi/adulting`): commands exposed as argv shell tools with rich descriptions. Everything an operator copies into an agent ships in this repo's `agent/` folder (tool files, the purpose text, skills, a live-context entry, an optional starting tree) and is installed by hand; see `agent/README.md`.
 
 ## Where this came from
 The library `internal/memory` was built inside the agent repo (`github.com/riazarbi/agent`, branch `memory`, commit `476f7da`), where memory was a set of agent built-ins. It was moved here unchanged. The agent-side adapters (`memory_read`, `memory_write`, `memory_search`, the `<memory_index>` renderer, the memory smokes) were left behind on that branch. Read them there as reference; do not copy them in, because they import agent packages.

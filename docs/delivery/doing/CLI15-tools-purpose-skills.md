@@ -54,6 +54,10 @@ the lock these are red, and this unit turns them green.
   `prompt/memory_purpose.md` (`TestInstallNeverOverwritesAStore`,
   `TestGuidanceAndReadmesPresumeNoTypology`).
 
+- `cmd/memory/tools_test.go`, `TestToolFilesSchema`: the expected listing of `agent/tools/` is the
+  twelve files, not the five (added in the lock amendment; the first builder stopped on it, as
+  instructed, having changed nothing). Also red at lock.
+
 Red at lock for those reasons: `TestShippedGuidanceIsTheSpecText`, `TestAgentFolderIsComplete`,
 `TestAgentReadmeNamesEveryFile`, `TestAgentReadmeCommandsInstall`, `TestReadmeAgentFolder`,
 `TestBuildBinariesCarryAgentFolder`, `TestInstallNeverOverwritesAStore`,
@@ -81,8 +85,11 @@ Red at lock for those reasons: `TestShippedGuidanceIsTheSpecText`, `TestAgentFol
    `--recursive`.
 4. **Each tool file works when run as the agent runs it.** For each of the seven files, running
    `command` with `prepend_args` (`${AGENT_STATE_DIR}` replaced by a temp state dir) followed by
-   the argument list from an example in its own description, adapted to a fixture store, exits 0
-   and does what the verb does: the node is moved, renamed, split, merged or deleted, the block is
+   the argument list of **every** example in its own description, exits 0 and does what the verb
+   does. An example is used with the same flags in the same order; only stems, block IDs, tags
+   and the `<parent stem>` placeholder are replaced by the fixture's own. The test reads the
+   examples out of the description (the JSON arrays in it), so an example the binary rejects
+   fails the test: the node is moved, renamed, split, merged or deleted, the block is
    moved, the tag is renamed. The fixture is built with the shipped `memory_write.json` in the
    same way.
    *Excludes:* a `prepend_args` whose verb name is misspelt (`move_block`); an example in a
@@ -103,13 +110,18 @@ Red at lock for those reasons: `TestShippedGuidanceIsTheSpecText`, `TestAgentFol
    every shipped file unchanged (the existing `TestAgentReadmeCommandsInstall`); it says to delete
    an existing `<state dir>/prompt/memory_usage.md`; it says each restructuring tool is granted by
    installing its file and withheld by leaving it out, and shows `--recursive` withheld with
-   `"forbidden_args": ["--recursive"]`; it says the skills are read only when the model loads
-   them; it no longer says that no verb moves, renames or deletes a node.
+   `"forbidden_args": ["--recursive", "-recursive"]`, saying why both spellings are listed (III.8,
+   *Tool files*); a test shows that `delete STEM --recursive=true` and `delete STEM
+   -recursive=true` are refused by the binary and delete nothing, so those two entries are
+   enough; it says the skills are read only when the model loads
+   them; it no longer says that no verb moves, renames or deletes a node; where it says which
+   tool descriptions mention exit 75, it covers the seven new ones.
    *Excludes:* install commands that skip `skills/`; an instruction that would leave both prompt
    files in place.
 7. **`README.md` agrees.** Its wiring guide's step 3 commands, run from the folder holding
    `agent/`, install every shipped file (the existing `TestReadmeAgentFolder`); the README names
-   `memory_purpose.md`, the three skills and the seven restructuring tools; neither README, nor the
+   `memory_purpose.md`, the three skills by name and the seven restructuring tool files by file
+   name; neither README, nor the
    usage text, mentions `memory_usage.md` except where telling the operator to delete the old
    file. A release archive carries the new files (the existing
    `TestBuildBinariesCarryAgentFolder`).
@@ -135,3 +147,8 @@ rules, written out in III.8.
 - The skill bodies contain the word "people" as English ("facts about people"); the word rule for
   the purpose text and the skills is `user`, `projects`, `topics`, as it is for the guidance today.
 - Put new tests in new test files.
+- In criterion 3, stems used in a description's examples (`priya`, `atlas-cutover`,
+  `outbox-etiquette`) are examples, not places to file things; the word rule is about `user`,
+  `projects`, `people`, `topics` and "area" only.
+- Some comments in existing test files will read stale after this unit ("the four tool files",
+  "placing usage.md"). Leave them: existing test files are not yours to edit.

@@ -2411,7 +2411,10 @@ exactly as it was.
   `memory_move_block.json`, `memory_split.json`, `memory_merge.json`, `memory_delete.json`,
   `memory_retag.json`), none `read_only`, each installed or not: granting move without delete is
   leaving `memory_delete.json` out. `--recursive` can be withheld from an installed
-  `memory_delete.json` with `forbidden_args`.
+  `memory_delete.json` with `"forbidden_args": ["--recursive", "-recursive"]`. Both spellings are
+  listed because the agent refuses a forbidden argument by exact match and `memory` accepts a
+  flag with one dash or two; `--recursive=true` needs no entry, since `memory` rejects a value
+  on that flag.
 
 - **`split` says which way** (operator ruling 2026-11-20, replacing "always a child"). A node
   that has come to cover two concepts is split by moving one concept's blocks into a new node,
