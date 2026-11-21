@@ -28,11 +28,21 @@ var agentFiles = []string{
 	"memory/notes/projects/projects.md",
 	"memory/notes/topics/topics.md",
 	"memory/notes/user/user.md",
-	"prompt/memory_usage.md",
+	"prompt/memory_purpose.md",
+	"skills/memory-capture/SKILL.md",
+	"skills/memory-restructure/SKILL.md",
+	"skills/memory-usage/SKILL.md",
+	"tools/memory_delete.json",
 	"tools/memory_index.json",
 	"tools/memory_lint.json",
+	"tools/memory_merge.json",
+	"tools/memory_move.json",
+	"tools/memory_move_block.json",
 	"tools/memory_read.json",
+	"tools/memory_rename.json",
+	"tools/memory_retag.json",
 	"tools/memory_search.json",
+	"tools/memory_split.json",
 	"tools/memory_write.json",
 }
 
@@ -87,8 +97,8 @@ func withDirs(prefix string, files []string) []string {
 	return out
 }
 
-// guidanceMarker introduces §4.5's fenced guidance text in the spec.
-const guidanceMarker = "shipped verbatim as `agent/prompt/memory_usage.md`"
+// guidanceMarker introduces III.8's fenced purpose text in the spec.
+const guidanceMarker = "**`agent/prompt/memory_purpose.md`**, byte-equal to this block"
 
 // specGuidance returns the content of the first fenced block after
 // guidanceMarker: the lines between its fences, each with its newline.
@@ -124,19 +134,20 @@ func specGuidance(t *testing.T) []byte {
 	return nil
 }
 
-// Acceptance criterion 2: agent/prompt/memory_usage.md is byte-equal to the
-// spec's §4.5 text, which no longer places the index in the system prompt.
+// agent/prompt/memory_purpose.md is byte-equal to the spec's III.8 purpose
+// text (CLI15; before that, memory_usage.md and §4.5's guidance), which
+// does not place the index in the system prompt.
 func TestShippedGuidanceIsTheSpecText(t *testing.T) {
 	want := specGuidance(t)
-	if !bytes.HasPrefix(want, []byte("# Memory\n")) || !bytes.Contains(want, []byte("## Before you answer\n")) {
+	if !bytes.HasPrefix(want, []byte("# Memory\n")) || !bytes.Contains(want, []byte("It is for what would still matter")) {
 		t.Fatalf("the spec block found is not the guidance:\n%s", want)
 	}
-	got, err := os.ReadFile(filepath.Join(repoRoot(t), "agent", "prompt", "memory_usage.md"))
+	got, err := os.ReadFile(filepath.Join(repoRoot(t), "agent", "prompt", "memory_purpose.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Errorf("agent/prompt/memory_usage.md differs from the spec text:\n--- got\n%s\n--- want\n%s", got, want)
+		t.Errorf("agent/prompt/memory_purpose.md differs from the spec text:\n--- got\n%s\n--- want\n%s", got, want)
 	}
 	if strings.Contains(strings.Join(strings.Fields(string(got)), " "), "system prompt") {
 		t.Error("the guidance still says the index is in the system prompt")
@@ -164,9 +175,12 @@ func TestAgentReadmeNamesEveryFile(t *testing.T) {
 	want := []string{
 		// the shipped paths
 		"tools/memory_read.json", "tools/memory_write.json", "tools/memory_search.json",
-		"tools/memory_index.json", "tools/memory_lint.json", "prompt/memory_usage.md", "livecontext/memory_index.json",
-		// the three destinations
-		"<state dir>/tools/", "<state dir>/prompt/", "<state dir>/livecontext/",
+		"tools/memory_index.json", "tools/memory_lint.json", "prompt/memory_purpose.md", "livecontext/memory_index.json",
+		"tools/memory_delete.json", "tools/memory_retag.json", "tools/memory_move.json", "tools/memory_rename.json",
+		"tools/memory_move_block.json", "tools/memory_split.json", "tools/memory_merge.json",
+		"skills/memory-usage/", "skills/memory-capture/", "skills/memory-restructure/",
+		// the four destinations
+		"<state dir>/tools/", "<state dir>/prompt/", "<state dir>/livecontext/", "<state dir>/skills/",
 		// substitution, and what an older agent shows (Part III.1)
 		"${AGENT_STATE_DIR}", "parent dir ${AGENT_STATE_DIR} does not exist (from --parent-dir)",
 	}

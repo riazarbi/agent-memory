@@ -29,7 +29,8 @@ func TestEncodeNew_Layout(t *testing.T) {
 	newNodeOutput(t, out.Bytes)
 
 	n := loadsClean(t, "n", out.Bytes)
-	wantKeys := []string{"description", "tags", "alpha", "b", "flag", "list", "n", "none", "zeta"}
+	// A new node is dated: modified is its last key (III.9).
+	wantKeys := []string{"description", "tags", "alpha", "b", "flag", "list", "n", "none", "zeta", "modified"}
 	if got := frontmatterKeys(n); !reflect.DeepEqual(got, wantKeys) {
 		t.Errorf("frontmatter keys = %q, want %q", got, wantKeys)
 	}
@@ -80,7 +81,7 @@ func TestEncodeNew_JSONValuesAndMinimalNode(t *testing.T) {
 		t.Errorf("a node without blocks should end at its closing line: %q", out.Bytes)
 	}
 	n := loadsClean(t, "n", out.Bytes)
-	if got := frontmatterKeys(n); !reflect.DeepEqual(got, []string{"description", "big", "e", "f", "i", "l", "num", "whole"}) {
+	if got := frontmatterKeys(n); !reflect.DeepEqual(got, []string{"description", "big", "e", "f", "i", "l", "num", "whole", "modified"}) {
 		t.Errorf("keys = %q", got)
 	}
 	want := map[string]any{"f": 1.25, "i": 42, "big": 1e21, "whole": 3, "l": []string{"x", "007"}, "e": []string{}, "num": 12}

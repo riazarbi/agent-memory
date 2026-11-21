@@ -3,6 +3,563 @@
 Dated entries, newest first. Each header is a unit of work; bullets capture the
 detail.
 
+## 2026-11-21 - A note stores the date its content last changed, and a link rewrite, a retag or a copy no longer makes an old note look new
+
+CLI16, spec III.9 (D34). A node's date was its folder note's mtime, which a link rewrite and any
+copy that drops file times reset. It is now the `modified` property in the note's frontmatter,
+which only `memory` sets. 37 existing tests pinned bytes or dates this unit supersedes; the builder
+listed them and left them, and the delivery lead edited them after the build (see Tests).
+
+- `internal/memory/modified.go` (new): everything about the property in one file. `readModified`
+  reads the scalar's *text* (RFC 3339 with `Z` or an offset; a date-time without one, seconds
+  optional, or a date, in the local zone), never yaml.v3's decoded timestamp, which takes an
+  offset-less value as UTC. `stampFor` is the rule: a content change gives the time of the call,
+  a mechanical rewrite keeps a readable value and otherwise writes the file's prior mtime.
+  `headWith` is the one place the line is written into a loaded note, called by the encoder and
+  by every restructuring verb, so both routes give the same bytes. The clock is the unexported
+  seam `now`; a call reads it once (`callTime`), so two notes one call changes carry one value.
+- The one-line edit (`stampRaw`): when no other frontmatter field changes, the `modified` key's
+  line is replaced where it stands, with whatever lines its old value took (a block list, a
+  literal block), or added directly before the closing `---`; every other byte is the source's.
+  The trap: the key cannot be located from yaml.v3's line numbers, because yaml.v3 counts a
+  U+2028 inside a literal block as a line break, which is exactly the edit-locked note the unit
+  must still date. So the line is found by text, at the mapping's indent, and the result is
+  parsed and compared with the frontmatter as read (same keys in order, same values, `modified`
+  equal to the stamp) before it is used. If the edit cannot be made or does not read back (a
+  flow mapping `{...}`, a key written `? modified`, an anchor on the old value that something
+  else aliases), the frontmatter is re-emitted with the key set instead. Rejected: re-emitting on
+  every content write (reflows layout, and locks the body of a note whose frontmatter cannot be
+  re-emitted: III.9).
+- `internal/memory/frontmatter.go`, `load.go`, `store.go`: `modified` is read into the node's
+  date (`Node.Modified`, still the one field `read`, `search` and `index` use), with the mtime
+  as fallback. It is typed as any property is, so a nested mapping is still an error; a value
+  that is not a date is the warning `modified: cannot be read as a date or date-time; the
+  file's time is used`, which `lint` reports as it reports every library problem (no change to
+  `lint`). `modified` is no longer listed in `Node.Properties`; `search '[modified:…]'` still
+  matches it, since search reads the frontmatter's fields.
+- `internal/memory/encode.go`, `rewrite.go`, `verify.go`: a new node's frontmatter ends with
+  `modified`. `EncodeChange` decides whether anything changes *before* it looks at the clock, so
+  repeating a write returns the file as read; when something does change it stamps the time of
+  the call, by the line edit (frontmatter otherwise untouched) or in the re-emitted document
+  (the key keeps its place, or goes last). The encoder's final check now also verifies what
+  `modified` reads back as. `rewriteFrontmatter` returns the document, not its text, so the
+  stamp is set in the same tree that is emitted. The encoder is no longer a pure function of its
+  arguments: it reads the clock.
+- `internal/memory/restructure.go`, `delete.go`, `moveblock.go`, `split.go`, `merge.go`,
+  `rename.go`, `retag.go`: `rewritten` takes the time of the call and dates a note that loses a
+  block, gains one, or gains a tag; a note that only has links retargeted, and every note a
+  `retag` rewrites, keeps its value or first gains it from its file's mtime. `split`'s new node
+  is dated as a create. `move` writes no note, and `rename` does not touch the renamed node's own
+  note unless it links to itself. A roll back restores bytes, so `modified` goes back with them.
+- `internal/memory/validate.go`, `cmd/memory/write.go`: the property key `modified` is refused,
+  by exact name (`Modified` is an ordinary property). The CLI refuses it while parsing its
+  arguments, as `--property: "modified" is set by memory`, exit 1, before the store is created
+  or locked; the library refuses the same request with a field error.
+- `cmd/memory/index.go`, `main.go`, `internal/memory/search.go`: no behaviour change (they already
+  order by `Node.Modified`); comments, the package comment and the usage text now say the date
+  is the stored value.
+- `agent/tools/memory_lint.json`: its description is III.7's amended text, which names the new
+  warning; generated from the spec's quoted lines, not retyped. **An existing install must copy
+  the file again.** Nothing else under `agent/` changed.
+- `README.md`: a new paragraph under Usage on a note's frontmatter and its date (what sets it,
+  what keeps it, the one-line edit, the formats read, the lint warning, and the advice to copy a
+  store with `cp -p` or `rsync -t` until every note carries the key); `write`'s refusal; the
+  `index` and `lint` paragraphs and the closing line on dates.
+- Tests: `internal/memory/modified_test.go` (new; the clock fixed through the seam) and
+  `cmd/memory/modified_bin_test.go` (new; the unit's eight acceptance criteria through the built
+  binary). Both sets were run against deliberately broken builds (the stored value ignored; an
+  offset-less value read as UTC; a write stamped before deciding; a mechanical rewrite stamped
+  with the time of the call; the frontmatter always re-emitted; a keyless note left keyless; the
+  key matched without case; local time written; a roll back skipped), each of which fails at
+  least one of them.
+- Docs and agent files checked for the old behaviour ("mtime", "the file's time", dates):
+  `README.md`, the usage text and package comment, `agent/tools/*.json`,
+  `agent/livecontext/memory_index.json`, `agent/prompt/memory_purpose.md`, the three skills.
+  **Amended at banking:** `agent/README.md`, spec III.6 and `CLAUDE.md` said the shipped
+  starting-tree notes are exactly what `memory write <stem> --parent / --description <D>`
+  creates. A create now writes `modified: <now>`, so each now says "but for the `modified`
+  line": the shipped notes have none and take their date from their files.
+- Existing tests edited by the delivery lead, not the builder (15 files: in `internal/memory`,
+  `encode_hardening_test.go`, `encode_helpers_test.go`, `encode_new_test.go`,
+  `encode_rewrite_test.go`, `delete_test.go`, `move_block_test.go`, `move_rename_test.go`,
+  `retag_test.go`, `root_test.go`, `split_merge_test.go`, `write_test.go`; in `cmd/memory`,
+  `move_block_bin_test.go`, `restructure_bin_test.go`, `split_merge_bin_test.go`,
+  `typology_bin_test.go`): each whole-note or key-list expectation gains the `modified` line,
+  exact where the clock is fixed, checked against the call's time window through the binary.
+  Two expectations are relaxed, both in `typology_bin_test.go`: the starting tree equals a
+  created note but for that one line, and the seeded-versus-written comparison strips the key
+  from the written tree first. Seven tests compared one call's note with another's and would
+  have failed whenever the two calls fell in different seconds; they no longer depend on time.
+- Deliberately not done: no migration verb (a keyless note gains the key when `memory` next
+  writes it); no new `lint` flag or problem beyond the reader's warning; no change to the other
+  tool descriptions, the purpose text or the skills.
+- Known limits: a note that is both edit-locked (D27) and written so the line edit cannot serve
+  it (a flow-mapping frontmatter, a `? modified` key) refuses body changes too, since neither
+  route can set the date. A failed restructuring call that rolls back gives a
+  keyless note it had replaced a new file time, so that note looks new (spec III.9, known gaps).
+
+## 2026-11-21 - The capture skill asks for a claim's source, and the spec records why OKF was not adopted and what sharing memory would need
+
+From the review of the Open Knowledge Format (`docs/research/okf-recommendations.md`). Text and
+documentation only: no Go changed.
+
+- `agent/skills/memory-capture/SKILL.md`, `docs/spec/agent-memory.md` (III.8, the skill's text):
+  one line added to "How to write it": when a claim rests on a file, a link, a message or a
+  person, say which. Why: a claim that names its source can be re-checked; one that does not can
+  only be believed or dropped. Plain prose, not an inline field, because nothing reads it but the
+  model. **An existing install must copy the skill again** to get the line.
+- `docs/spec/agent-memory.md` (§6, out of scope): the gaps a shared or replicated store would
+  have to close (no record of which agent wrote what; stem collisions, unserialised writes and
+  unrewritten links across stores; no merge strategy for replicas), and the OKF decision: not
+  adopted as the store format, with the conditions for revisiting. Recorded there too: a per-claim
+  review-by date is deferred to the audit's design, and needs no store change.
+- Not done: no smoke or binary test beyond the existing one that pins the skill file to the
+  spec's text byte for byte, which covers this line.
+
+## 2026-11-21 - A flag given twice is refused instead of silently taking the last value
+
+Closes the known gap recorded at CLI14's acceptance (spec III.8, "A flag given twice"). Before,
+`merge x --into a --into b` merged into `b` and said nothing; a model that assembles a call badly
+got a restructuring it did not ask for. A direct fix, not a delivery unit: one check in the shared
+parser.
+
+- `cmd/memory/args.go`: `parseArgs` refuses a flag set a second time with `<flag as typed>: given
+  more than once` (exit 1, nothing changed), under either spelling (`--into` then `-into`) and
+  even when the two values agree. It takes the names of the flags that may repeat. Booleans are
+  refused too (`--recursive --recursive`), so there is one rule and no exception to remember.
+  Trap: the flag package has already stored the second value when the check fires; that is
+  harmless only because the call stops there. Rejected: refusing only when the values differ (a
+  second rule, for no caller's benefit).
+- `cmd/memory/write.go`, `cmd/memory/split.go`: declare what repeats: `write`'s `--tag`,
+  `--property`, `--add`, `--replace`, and `split`'s `--block`. **Behaviour change for `write` and
+  `read`**, which have taken the last `--parent`, `--description`, `--block` or `--depth` since
+  they shipped. A repeated `--property` key still takes the last value.
+- `cmd/memory/unit_test.go`, `cmd/memory/split_merge_bin_test.go`: the parser's rule, and through
+  the built binary one refusal per verb that takes a flag, each checked to change nothing.
+- `docs/spec/agent-memory.md`: III.8's known gap becomes the rule. The same section records the
+  operator's decisions of this date: `agent/tools/` is a library and the documented install
+  copies all of it (the operator removes what an agent should not have); `split`'s new node
+  getting no tags or properties, and `merge` refusing a carried-entry name collision, are
+  accepted as built.
+- Not done: no change to the READMEs or the tool descriptions. None of them describes repeating
+  a single-value flag, and the tool descriptions are pinned to the spec byte for byte.
+
+## 2026-11-21 - An agent can be given the restructuring verbs, is told on every turn only what memory is for, and learns how to use it from three skills
+
+CLI15, the last restructuring unit (spec III.8, "Tool files", "Tool descriptions" and "The prompt
+and the skills"; III.4). Everything in this entry is under `agent/`, the READMEs and tests: no
+production Go changed, no verb accepts, prints or refuses anything it did not before. **An existing
+install must delete `<state dir>/prompt/memory_usage.md`** when it copies in `memory_purpose.md`,
+or the model reads both on every turn; both READMEs' install commands do it.
+
+- `agent/tools/memory_move.json`, `memory_rename.json`, `memory_move_block.json`,
+  `memory_split.json`, `memory_merge.json`, `memory_delete.json`, `memory_retag.json` (new): one
+  shell-tool file per restructuring verb, each `{"command": "memory", "prepend_args":
+  ["--parent-dir", "${AGENT_STATE_DIR}", "<verb>"], "read_only": false, "allow_user_args": true,
+  "forbidden_args": []}` with III.8's description, generated from the spec's quoted text, not
+  retyped. Trap: the file is `memory_move_block.json` but its verb is `move-block`; `move_block`
+  is an unknown verb. They ship together so that no release offers the model part of the set the
+  `memory-restructure` skill describes. Nothing pins `--recursive` on or off: the operator
+  withholds it by editing the installed file (see `agent/README.md` below).
+- `agent/prompt/memory_purpose.md` (new), `agent/prompt/memory_usage.md` (deleted): the every-turn
+  prompt file is now III.8's purpose text, two paragraphs on what memory is and what it is for.
+  "What to save", "How to write it" and "Before you answer" left it for the skills. The cost,
+  accepted in the spec: that advice is no longer in front of the model on every turn, only each
+  skill's one-line description is.
+- `agent/skills/memory-usage/SKILL.md`, `agent/skills/memory-capture/SKILL.md`,
+  `agent/skills/memory-restructure/SKILL.md` (new): III.8's three skill texts, byte for byte, in
+  the agent's skill format (frontmatter of exactly `name` and `description`, the folder named as
+  `name`). No body names a node, and each refers to tools by what they do, since an operator may
+  install only some.
+- `agent/README.md`: the table lists the seven tool files, the purpose text and the three skills,
+  with the new destination `<state dir>/skills/`; the install commands make `skills/`, copy the
+  three skill folders, copy `memory_purpose.md` and `rm -f` the old `memory_usage.md`. New section
+  "The restructuring tools": each is granted by installing its file and withheld by leaving it
+  out, and `--recursive` is withheld from an installed `memory_delete.json` with
+  `"forbidden_args": ["--recursive", "-recursive"]`, both spellings because the agent refuses a
+  forbidden argument by exact match and `memory` takes a flag with one dash or two
+  (`--recursive=true` needs no entry: `memory` refuses a value on the flag). "The guidance" became
+  "The purpose text and the skills", which says the skill bodies are read only when the model
+  loads them and which skills to leave out with which tools. The exit-75 sentence now covers every
+  description but `memory_lint.json`'s. Removed: "no verb moves, renames or deletes a node, so it
+  can never remove one", which the tool files make false. Decided where the spec is silent: the
+  `rm -f` is in the install commands rather than only in prose, so that following the README
+  cannot leave both prompt files in place; `rm -f` because a fresh install has no such file.
+- `README.md`: the status line, the wiring guide's opening and step 3 name `memory_purpose.md`,
+  the three skills and the twelve tool files; step 3's commands install the skills and remove the
+  old prompt file, as `agent/README.md`'s do. The Usage section and the store paragraphs were
+  checked and needed no change (no verb changed).
+- `cmd/memory/main.go`: checked, not changed. Neither the usage text nor the package comment names
+  a shipped file, so there was nothing to rename; a test now fails if either names
+  `memory_usage.md`.
+- `cmd/memory/restructure_tools_test.go` (new): each of the seven files against the spec (exactly
+  the six keys, the pinned verb, not read-only, `forbidden_args` `[]`, the description read from
+  III.8); no description says "area", names a starting-tree stem or mentions `--parent-dir`; and
+  every example in every description is read out of the description (its JSON arrays) and run
+  through its tool file as the agent runs it, on a fixture built with the shipped
+  `memory_write.json`, checking what the verb did. The fixture uses the example's own stems and
+  tags, and replaces only block IDs and `<parent stem>`. Every `["` in a description must open an
+  example, so the extractor cannot silently miss one.
+- `cmd/memory/skills_test.go` (new): the purpose text (byte-equal to the spec, no `##` heading,
+  none of the old sections, alone in `agent/prompt/`) and the skills (byte-equal to the spec, the
+  only file in a folder named as `name`, loadable by the format rules of III.8, written out as
+  `skillFormatProblems`). `TestSkillFormatCheckRefusesBadSkills` runs that check over ten broken
+  variants of a shipped skill, so the check is known to refuse what the agent's loader refuses.
+  Not done: loading the skills with the agent's own loader, which lives in the agent repo.
+- `cmd/memory/agent_docs_test.go` (new): both READMEs' install commands, run on a state dir that
+  has the old prompt file, an operator's own prompt file and an operator's own skill, remove only
+  the old file and install everything; `memory_usage.md` is named nowhere except in a line that
+  says to delete it; the README's `forbidden_args` are parsed out of it and shown to be both
+  needed (`delete X -recursive` deletes a subtree) and enough (`--recursive=true`, `-recursive=true`
+  and the `=false` forms are refused by the binary and delete nothing). Some checks there pin
+  README wording by pattern ("exact match", "one dash or two", "only when the model loads"):
+  prose cannot be tested any other way, and a reworded README must keep saying those things.
+- Existing tests: none edited. The nine that were red at the lock (the eight the unit lists and
+  `TestToolFilesSchema`) are green. Comments in older test files that say "the four tool files" or
+  "placing usage.md" now read stale and were left, as the unit says.
+- Docs and agent files checked for the old behaviour: `README.md`, `agent/README.md`, every file
+  in `agent/tools/`, `agent/livecontext/memory_index.json`, `agent/prompt/`, `agent/skills/`,
+  `agent/memory/notes/` (unchanged), the usage text and package comment. The five existing tool
+  files and the live-context entry are byte-for-byte unchanged; `memory_write.json` keeps "Tags
+  cannot be cleared and blocks cannot be deleted.", which is true of `write`.
+- Not done, by scope: a dream or audit recipe, a `memory-lint` skill, any agent-side change. No
+  dependency added (`gopkg.in/yaml.v3`, already required, is now also imported by a test in
+  `cmd/memory`).
+
+## 2026-11-20 - A node that covers two subjects can be divided and two nodes about one subject joined, each in one call: `split` and `merge`
+
+CLI14, the fourth restructuring unit (spec III.8, "`split`, exactly" and "`merge`, exactly").
+With it all seven restructuring verbs exist in the binary. No tool file, skill or prompt text ships
+for them yet (CLI15): `agent/` is byte-for-byte unchanged, so no agent can call them until then,
+and `agent/README.md` and the shipped tool descriptions still say nothing can be deleted or
+cleared.
+
+- `internal/memory/split.go` (new): `Writer.Split(SplitRequest)`. Under the write lock and from a
+  fresh load it resolves the blocks, checks the new node as `write` checks a create (`checkCreate`,
+  unchanged, with its refusals renamed to the field `into`), works out every note, then makes the
+  new node (`makeNode`), replaces the changed notes (`replaceAll`), reloads and checks the store
+  with `unsound`. The new note is laid out by the encoder's own new-note code (`newNote`), so it
+  is byte-equal to what `write` creates, each block carrying the ID it already has; it gets no
+  tags and no properties. The old note loses the blocks by the same byte surgery `delete --block`
+  uses. Only edges whose stem is the split node *and* whose block is one of those moved are
+  retargeted, the moved blocks' own text included; `[[STEM]]` stays. Order of work, and why: the
+  new node is made *before* the old note is rewritten, so a crash part-way leaves the blocks in
+  both notes (a duplicate-ID lint warning), never in neither. Refusals, each a `FieldError`
+  naming `stem`, `into`, `parent`, `description` or `block`, or a `NoNodeError` for an unknown
+  stem or parent: what the arguments alone show (the root, an invalid new stem, a missing parent,
+  a bad description, no block, an empty ID, an ID given twice) is refused before the lock is
+  taken; then an unknown stem, a block not in the node, an ID more than one block carries (as
+  `move-block`), a new stem in use, an unknown parent, and whatever `checkCreate` refuses.
+  Decided where the spec is silent: an unknown `--parent` is a `NoNodeError` (near matches at the
+  CLI) rather than `write`'s "no node exists to create under" text; a loaded node's stem as `NEW`
+  gets its own message ("in use by the node at …"), because `checkCreate` would call it "a folder
+  the reader skipped (no problem reported)"; a moved block keeps the reader warnings its text
+  already had and a block that is only an ID arrives as `^ID`, as `move-block` does (the new note
+  is not run through `write`'s block-text validation: the text is already in the store).
+- `internal/memory/merge.go` (new): `Writer.Merge(from, to)`. One replace of the kept note can
+  carry three kinds of edit: the folded-in node's blocks appended (as `move-block` appends one),
+  its own links to that node retargeted, and the tag list re-emitted, only when a tag is added.
+  Then every entry of the folded-in folder except its note and dot-entries is renamed into the
+  kept node's folder (loaded children, folders that did not load, stray files), the folder is
+  renamed aside to `.<stem>.deleting`, the store reloaded and checked, and only then is the hidden
+  folder removed, as `delete` does. Notes are replaced *before* any folder moves, so their paths
+  are the ones loaded; the read-back after the reload looks for them where the move put them.
+  Refused: the root (before the lock), an unknown node, `TO` equal to `FROM` or under it, and an
+  entry that would move having the name of one already in `TO`'s folder (`lstat`, so it also
+  catches a name differing only by case on a case-insensitive filesystem). Decided where the spec
+  is silent: the collision names the field `into`; the folded-in note must still hold the bytes
+  that were read (`delete`'s edit-race check, exit 75) because it is discarded; a kept note that
+  gains nothing (no block, no tag, no link) is not written; a hand-written paragraph with no ID
+  in the folded-in node arrives as text with no ID ("IDs and text kept"); when the reload finds a
+  replaced note edited by something that does not take the lock, the call exits 75, rolls nothing
+  back and still removes the hidden folder, so the merge is complete on disk, as `rename`'s is.
+  Known gaps, not fixed: `delete`'s (the hidden folder that cannot be removed, the crash between
+  rename-aside and removal) and `rename`'s (restored notes carry new mtimes); a merge that would
+  give the kept note two blocks with one ID, or carry a hand-written paragraph ending in a stray
+  `^token`, is refused by the note check with the encoder's "reader warns about" text rather than
+  a message of its own; a crash between replacing notes and moving entries leaves links rewritten
+  and the folded-in node still there.
+- `internal/memory/restructure.go`: `noteChange` now takes several `drops`, several `adds` and
+  an optional tag list, where it took one block to drop and one to add; `rewritten` applies them.
+  Several drops are applied as deleting the blocks one at a time (`withoutBlocks`, built on the
+  unchanged `dropRange`), which is what "each block leaves the note as `delete --block` removes
+  one" needs: taking the union of single-drop ranges instead leaves a trailing blank run when the
+  last two blocks go. A test compares a split with one-by-one deletes for every subset of a
+  five-paragraph note, in both orders. `withLastBlock` writes a block with no ID as its text
+  alone (`paragraph`). `retargeting` and `retaggedHead` are lines lifted out of `moveblock.go`
+  and `retag.go`. No behaviour of `delete`, `retag`, `rename` or `move-block` changes: their
+  tests pass untouched.
+- `internal/memory/delete.go`, `moveblock.go`, `rename.go`, `retag.go`: call sites follow
+  `noteChange`'s new fields and the two lifted helpers. No behaviour change.
+- `internal/memory/encode.go`: `EncodeNew`'s layout is lifted into `newNote`, which `Split`
+  shares. `internal/memory/write.go`: `create`'s folder-and-note step is lifted into `makeNode`,
+  which `Split` shares, with its roll back. No behaviour change to `write`.
+- `cmd/memory/split.go`, `cmd/memory/merge.go` (new): the verbs. Argument errors name the
+  argument as typed (`STEM`, `FROM`, `--into`, `--parent`, `--description`, `--block`, or `-into`
+  when typed so) and come before the store is looked at: a missing positional, `/` as `STEM`,
+  `FROM`, `NEW` or `TO`, a missing flag (the first missing in usage order), an invalid `NEW`.
+  Results are `<memory_split from stem parent path blocks left links_rewritten>` and
+  `<memory_merge from stem blocks children tags_added links_rewritten>`. `merge`'s first
+  argument is named `FROM` in errors, as the spec's table names it, not `STEM`.
+- `cmd/memory/main.go`: both verbs registered; the usage text and package comment list them, and
+  the lock sentence now names every writing verb once (`write`, `delete`, `retag`, `move`,
+  `rename`, `move-block`, `split` and `merge`), replacing "… and so does move-block".
+- `README.md`: the Usage section documents both verbs with their results and refusals; the
+  status line, the lock-file sentences, the root paragraph and the exit-75 sentence list them.
+- Tests: `internal/memory/split_merge_test.go` (new) pins the bytes of every note, injects a
+  failure at each step of each verb (the new note, each replace, each entry move, the
+  rename-aside, the reload, an outside edit) and checks the lock; `cmd/memory/
+  split_merge_bin_test.go` and `split_merge_busy_bin_test.go` (new) run the unit's eight
+  acceptance criteria through the built binary.
+- Docs checked: spec III.8 (already amended in this unit's lock), the usage text and package
+  comment, `README.md`. Deliberately not touched, being CLI15's: `agent/README.md`,
+  `agent/tools/`, `agent/prompt/`, `agent/livecontext/`. Not changed and now stale: spec III.1's
+  list of verbs that take a lock file names five restructuring verbs, not `split` and `merge`
+  (the builder does not edit the spec).
+
+## 2026-11-20 - A single block can change node: `move-block` moves it with its ID and rewrites every link to it, and `rename` refuses a new stem that `write` would refuse to create
+
+CLI13, the third restructuring unit (spec III.8, "`move-block`, exactly", and the paragraph of
+"`rename`, exactly" that begins "`NEW` is checked as strictly as `write` checks a new stem").
+`split` and `merge` are not built (CLI14), and no tool file, skill or prompt text ships for the
+restructuring verbs yet (CLI15): `agent/` is byte-for-byte unchanged, so no agent can call them
+until then. This is the second build of the unit (the doing file's "Rework 1"): the target note is
+appended to by byte surgery, not through `write`'s encoder.
+
+- `internal/memory/moveblock.go` (new): `Writer.MoveBlock(id, to)`. Under the write lock and from
+  a fresh load it finds the one block carrying the ID, works out every note that changes, replaces
+  them (`replaceAll`), reloads, and checks the store with `unsound`. Three kinds of edit, and one
+  note can need two of them in the same replace: the old note loses the block (and has its other
+  links to the block retargeted), the target gains it (and has its own links retargeted), and
+  every other note holding a link to the block has that link retargeted. The moved block's links
+  to itself are rewritten in its text as it moves, and counted. Only edges whose stem is the old
+  node *and* whose block is the ID are touched: `[[old]]` stays, a `[[to#^ID]]` that dangled
+  before now resolves uncounted, and `[[other#^ID]]` is left dangling. Refusals, in the spec's
+  order, each a `FieldError` naming `id` or `to` (or a `NoNodeError` for an unknown target): the
+  root as target (before the lock is taken, so nothing is created), no block with the ID, the ID
+  on more than one block (across nodes or twice in one), the target unknown, the block already
+  there. The trap: the "more than one block" check must come from a scan of every loaded block,
+  not from `Store.Block`, which answers with the first holder and would silently move it.
+  Decided where the spec is silent: an empty ID is refused naming `id` before the lock; the
+  duplicate-ID message lists the nodes that hold it.
+- `internal/memory/restructure.go`: `rewritten` and `noteChange` (new) are the one place a
+  restructuring call edits a note by byte surgery: per-block cuts on link targets, one block
+  removed, one block appended, then the output is loaded through the folder-note parser
+  (`verifyOutput`) before anything is written. It is the bodies of `withoutBlock` (`delete
+  --block`) and `relinked` (`rename`) lifted into one function; both now call it, with no
+  behaviour change (their tests pass unchanged). `dropRange` is `withoutBlock`'s line arithmetic,
+  lifted. `keptBytes` is the "replaced note holds other bytes at the reload" loop of
+  `replaceNotes`, lifted so `MoveBlock` uses the same check and the same `ErrChangedOnDisk`
+  wording. Rejected: giving `MoveBlock` its own copy of the removal and relinking code (a second
+  rule for what a removed block takes with it).
+- `internal/memory/restructure.go`, `withLastBlock` (new): how the block is appended. The note's
+  bytes are kept; its last line gets a line ending if it had none; one blank line is added; then
+  the text, a space, `^ID` and one line ending, all in the note's own line ending (the opening
+  delimiter line's, as the encoder uses). So an ID-less hand-written paragraph in the target is
+  not given an ID, a run of blank lines is not collapsed, a CRLF note stays CRLF and a byte-order
+  mark stays. This is deliberately not `write --add`'s encoder, which does adopt and collapse:
+  that was the first build's defect. Decided where the spec is silent or pulls two ways: a target
+  that already ends in one or more blank lines keeps them and gets none added ("every byte stays"
+  wins over "exactly one blank line", which then means at least one); a target with no blocks gets
+  the frontmatter, one blank line and the block, dropping any blank lines that followed the
+  frontmatter, because the spec says such a note is "laid out as `write` lays out a first block";
+  a block whose ID was written on a line of its own arrives as text, space, `^ID` (the spec's
+  form), and a block that is only an ID arrives as `^ID` alone, since a leading space before it
+  would be a stray byte. The moved text keeps the reader warnings it already had (an unsupported
+  `[[x#Heading]]`, an embed): they are added to what `verifyOutput` allows for the target,
+  otherwise such a block could never be moved.
+- `internal/memory/rename.go`: `refusal` now also calls `findFolders`, the walk `write`'s create
+  check uses, so `NEW` is refused when any folder in the tree carries it, loaded or not (the
+  message quotes the reader's reason for skipping it, as `write`'s does), and when it differs from
+  a folder's name only by letter case. No second collision rule: it is the same walk, comparing
+  names, so the case check does not depend on the filesystem. It runs after the own-stem and
+  loaded-stem checks and before the two `Lstat` checks, so on a case-insensitive filesystem a
+  case-different folder beside the node is reported as a case collision, not as "an entry already
+  there". `write`'s own messages are untouched; `rename`'s are worded for `NEW`. `retargetCuts`
+  (new) is `relinkCuts` with the edge test as a parameter, so `move-block` matches on stem and
+  block ID with the same scanner positions; `relinkCuts` calls it, unchanged in behaviour.
+- `internal/memory/delete.go`: `withoutBlock` is now one call of `rewritten`. No behaviour change.
+- `cmd/memory/moveblock.go` (new), `main.go`: the verb `move-block ID --to STEM`, its result
+  `<memory_move_block id from stem links_rewritten>`, and its errors: `ID:` or the flag as typed
+  (`--to`, `-to`), an unknown `--to` with near matches, a surplus argument quoted as `rename`
+  quotes one. Missing arguments, an empty `--to` and `--to /` fail before the store is created.
+  `ID` is passed as typed (`^m-…` with a caret is an unknown ID, as in `read` and `delete`). The
+  usage text and the package comment list the verb and `rename`'s stricter check. The trap in the
+  usage text: `TestUsageListsMoveAndRename` (CLI12) pins the sentence "write, delete, retag, move
+  and rename take the store's write lock", so the verb is added after it ("and so does
+  move-block") rather than inside the list; the test is unchanged.
+- `README.md`: the Usage section gains the `move-block` command line, a paragraph on what it
+  does, refuses and prints, and the stricter `rename` check; the status line, the lock and
+  retry sentences and the root paragraph list the verb.
+- Tests: `internal/memory/move_block_test.go` (new) covers the bytes of both notes (line endings,
+  byte-order mark, missing final newline, blank-line runs, ID-less paragraphs, an empty target),
+  link counting, the refusals and their order, a failure injected at each note replacement and at
+  the reload, an outside edit (`ErrChangedOnDisk`), the lock, and `rename`'s new checks.
+  `cmd/memory/move_block_bin_test.go` and `move_block_busy_bin_test.go` (new) run the unit's eight
+  acceptance criteria through the built binary on the fixture store the unit describes.
+- Docs and agent files checked: `docs/spec/agent-memory.md` III.8 already holds "`move-block`,
+  exactly" and the `rename` ruling (committed with the unit's lock; not edited here).
+  `agent/README.md`, `agent/tools/*.json`, `agent/prompt/memory_usage.md`,
+  `agent/livecontext/memory_index.json` and `agent/memory/notes/` are deliberately unchanged:
+  they are CLI15's, and `agent/README.md` still says no verb moves, renames or deletes a node
+  until then (a recorded gap, III.8). No new dependency.
+
+## 2026-11-20 - A node can change place and name: `move` relocates it with its subtree, and `rename` gives it a new stem and rewrites every link to it
+
+CLI12, the second restructuring unit (spec III.8, "`move`, exactly" and "`rename`, exactly").
+`move-block`, `split` and `merge` are not built (CLI13, CLI14), and no tool file, skill or prompt
+text ships for these verbs yet (CLI15): `agent/` is byte-for-byte unchanged, so no agent can call
+them until then.
+
+- `internal/memory/move.go` (new): `Writer.Move`. One `rename(2)` of the node's folder into the
+  parent's folder (`notes/` itself for `/`), under the write lock and from a fresh load. No note is
+  read or written, so every file keeps its bytes and mtime and whatever else is in the folder
+  (unloaded children, stray files) goes along. Refused: an unknown stem or parent (`NoNodeError`,
+  whose `Stem` says which), the node itself or its own descendant as parent, and an entry of the
+  node's name already in the parent's folder (checked with `Lstat`, so a plain file or a folder
+  that did not load both count). A move to the parent the node already has returns its result
+  before touching anything. The store is reloaded after the rename and the folder renamed back if
+  the check fails. Not done: D28's "changed on disk" check. A move replaces no bytes, so an edit
+  made by something that does not take the lock is carried along intact; there is nothing to
+  clobber and nothing to refuse.
+- `internal/memory/move.go`, `unsound`: the postcondition check for both verbs, and the trap in
+  this unit. CLI11's `newErrors` compares whole problems (path and reason). After a move or rename
+  that is wrong twice over: a folder inside the node that did not load is the same error at a new
+  path, and reasons quote paths the call changes (`stem "x" is already used by <path>`, `cannot
+  read folder: open <path>`). Compared that way, every move carrying an unloaded folder was rolled
+  back, against "whatever else is inside the folder goes with it" (the first run of the library
+  test showed it). So here an error is identified by the folder it skips: the paths of the errors
+  before the call are passed through the relocation (old folder to new), and the call fails only
+  when the store afterwards skips a folder it did not skip before, or the node did not load at
+  its new path. `newErrors` itself is unchanged and still serves `delete` and `retag`.
+- `internal/memory/rename.go` (new): `Writer.Rename` and `CheckStem`. Order: every rewritten note
+  is worked out first; the notes are replaced where they are (the renamed node's own included);
+  the folder note is renamed to `NEW.md`; the folder is renamed; the store is reloaded and
+  checked. A failure at any step undoes the steps before it, so the store is as it was: tested
+  for a note that cannot be replaced, each of the two renames, and the reload. Links are found
+  with `scanLinkSpans`, the reader's own scanner (no second parser): for each edge whose stem is
+  the old one, the bytes right after `[[` are replaced, so aliases and block IDs are untouched and
+  a `[[STEM]]` in inline code or in an unsupported form, which is not an edge, is left alone. The
+  replacement is made in the block's source lines (`sourceCuts`, as `retag` does), not by
+  re-encoding the note: line endings, a byte-order mark, ID-less paragraphs, blank-line runs and
+  a missing final newline all stay. The output is still loaded through the folder-note parser
+  (`verifyOutput`) before anything is written. Refused, naming `new`: a stem that is not valid,
+  the node's own stem, a loaded node's stem, an entry named `NEW` beside the folder. Decided where
+  the spec is silent: a file `NEW.md` already inside the node's folder is refused too, because
+  renaming the folder note onto it would silently overwrite it; a folder named `NEW` elsewhere in
+  the tree that did not load is not refused (the spec lists only loaded stems and the entry beside
+  the folder; `write` is stricter for creates); the stem syntax is checked before the lock is
+  taken, so `rename nowhere Bad_Stem` names `NEW`, not `STEM`. A replaced note found holding other
+  bytes at the reload is `ErrChangedOnDisk` and is not rolled back over, as D28 rules and
+  `replaceNotes` does; the rename is then complete on disk and the retry will say the old stem is
+  unknown (recorded as a gap, not fixed).
+- `internal/memory/restructure.go`: `replaceNotes` is split, behaviour unchanged. `replaceAll`
+  (new) is its first half, replacing several notes and restoring those already replaced when one
+  fails; `rename` needs the list it returns to restore the notes after a later step fails.
+- `internal/memory/retag.go`: `cutBlock` (new) is the three lines of `retagBody` that apply cuts
+  to a block's source lines, lifted out so `rename` uses the same code. No behaviour change.
+- `cmd/memory/move.go`, `rename.go` (new), `main.go`, `read.go`: the verbs, their results
+  (`<memory_move stem from parent path>`, `<memory_rename from stem links_rewritten>`, via
+  `encoding/xml`), the usage text and the package comment. Argument errors come before the store
+  is created and name the argument as typed: `STEM`, `--parent` (or `-parent`, if typed so), `NEW`,
+  or the surplus argument itself (`rename a b c` names `"c"`). `/` is refused as `STEM` and as
+  `NEW`, and accepted only as `--parent`. An unknown `--parent` lists near matches like an unknown
+  stem (`unknownNodeAmong`, which `unknownStemAmong` now calls; `read`'s message is unchanged).
+  Trap: the library's `NoNodeError` does not say which argument it is about. `move` looks the
+  stem up first, so an unknown stem equal to `STEM` is `STEM`'s and any other is `--parent`'s.
+  `writerAt` (new) is the "create the missing store, get its writer" pair both verbs share.
+- `README.md`: the Usage section documents both verbs (the examples, a paragraph each with the
+  result element, the refusals, the no-op move, all-or-nothing rename), and the status line lists
+  them. Also corrected there, having gone stale: "no verb moves or renames one yet", the list of
+  verbs that take the lock and create its file, and exit 75's list of verbs.
+- Tests: `internal/memory/move_rename_test.go` (new) covers the library: byte-exact rewrites
+  (CRLF, BOM, ID-less paragraphs), roll back at each step with injected failures, a real stem
+  collision caused by a move, an unloaded folder carried along, the lock. `cmd/memory/
+  move_rename_bin_test.go` and `move_rename_busy_bin_test.go` (new) cover the unit's eight
+  acceptance criteria through the built binary on the fixture store F. No existing test was
+  changed; none pinned the usage text or the verb list exactly.
+- Docs and agent files checked: `docs/spec/agent-memory.md` III.8 already holds both verbs'
+  rules and was not edited. `agent/README.md`, `agent/tools/*.json`, `agent/prompt/memory_usage.md`,
+  `agent/livecontext/memory_index.json` and `agent/memory/notes/` are deliberately unchanged
+  (CLI15 ships the tool files and rewrites the texts). Left stale on purpose, for the operator:
+  spec III.1 still lists only `write`, `delete` and `retag` as the verbs that take the lock file,
+  and `agent/README.md` still says no verb moves, renames or deletes a node (CLI11's known gap,
+  closed by CLI15).
+
+## 2026-11-20 - Memory can lose things: `delete` removes a block, a node or a subtree and reports the links it broke, and `retag` renames or removes a tag store-wide
+
+CLI11, the first of the restructuring verbs (spec III.8). `move`, `rename`, `move-block`, `split`
+and `merge` are not built (CLI12-CLI14), and no tool file, skill or prompt text ships for these
+verbs yet (CLI15): `agent/` is byte-for-byte unchanged, so no agent can call them until then.
+
+- `internal/memory/restructure.go` (new): what the restructuring calls share. `locked` takes the
+  write lock and loads fresh; `replaceNotes` replaces several folder notes atomically (the
+  existing `commit`, with its edit-race check), reloads, and restores every note already replaced
+  if a replace fails or the reload shows an error the store did not have (`newErrors`, a multiset
+  diff of error-severity problems: III.8's postcondition). A note found holding other bytes at the
+  reload is `ErrChangedOnDisk` and is not rolled back over (D28). `NoNodeError` carries the loaded
+  stems so the CLI can list near matches without a second, unlocked load. The check is on errors
+  only, not warnings: deleting a block can legitimately reword another node's "block ID also used
+  in" warning, so a warnings diff would roll back good deletes.
+- `internal/memory/delete.go` (new): `Writer.Delete`. A block delete is byte surgery on the source
+  lines (the block's lines plus the blank lines up to the next block, or, for the last block, back
+  to the previous one), not a pass through the encoder: the encoder would also give IDs to ID-less
+  operator paragraphs and collapse blank-line runs, and the rule is "changes nothing else". The
+  result is still loaded through the folder-note parser (`verifyOutput`) before it is written. A
+  node delete refuses, without `--recursive`, a folder holding anything but the folder note and
+  dot-entries, judged from the directory listing, not from the loaded children, so a folder that
+  failed to load or a stray file blocks it too. The folder is renamed to `.<stem>.deleting`
+  beside itself, the store reloaded and checked, and only then removed. Trap: the spec's sentence
+  order reads "renamed, then removed, then reloaded, then renamed back on error", which cannot be
+  done; the reload comes before the removal. Every loaded note in the subtree is compared with
+  the bytes read before the rename (the edit-race check). `Dangling` is every link in a surviving
+  block that resolved before and does not resolve after, so links from inside the deleted
+  subtree, links already dangling, and links a duplicated block ID's second holder still answers
+  are left out without special cases. Not done: if removing the hidden folder fails after the
+  check passed, the node is gone from the store and the call returns an error naming the
+  leftover; it is not renamed back, because it may be half removed.
+- `internal/memory/retag.go` (new): `Writer.Retag` and `CleanTag`. Every note is worked out
+  before any is written, so a block that would be left empty fails the call with nothing
+  changed. Block text is edited in the block's source lines (text offsets map to source offsets
+  line by line), so line endings, the way the ID is written and ID-less paragraphs stay as they
+  were; the frontmatter tag list goes through the existing `rewriteFrontmatter` (D26), so a
+  changed list is re-emitted as any tag change is, and an unchanged one is copied. Removing an
+  inline tag takes the space before it, or, when the tag starts the text or a line, the space
+  after it; a tag alone on a line goes with its line break (leaving a blank line would split the
+  block in two). A removal that would leave a blank line or expose a list, quote or heading
+  marker is refused, naming the block. Decided where the spec is silent: matching is
+  case-sensitive (search folds case, but the index counts `Misc` and `misc` as two tags);
+  duplicates are collapsed only in a tag list the retag touches; `NEW` equal to `OLD` returns
+  before taking the lock.
+- `internal/memory/links.go`, `search.go`: `scanLinks` and `inlineTags` are now thin wrappers over
+  `scanLinkSpans` and `inlineTagSpans`, which also say where each link or tag is written. That is
+  how `delete` reports a link "as written" (alias included) and `retag` rewrites only the tag
+  token, without a second parser. Both wrappers still return nil for no matches, which existing
+  tests compare against.
+- `cmd/memory/delete.go`, `retag.go` (new), `main.go`, `read.go`: the verbs, their results
+  (`<memory_delete>` with `<dangling>`, `<memory_retag>`, via `encoding/xml`), the usage text and
+  the package comment. Argument errors come before the store is created and name the argument as
+  typed: `STEM`, `--block`, `--recursive`, `OLD`, `NEW`. `delete /` is refused naming `STEM`. A
+  `<dangling>` whose holding block has no ID has no `block` attribute. `read`'s unknown-stem
+  message was split so `delete` gives the same line, near matches included.
+- `README.md`: the status line lists both verbs; the Usage section has examples and a paragraph
+  for each, with the result XML. "No verb ... deletes a node" and "no lock file except `write`'s"
+  are corrected (a refused `delete` or `retag` on a missing store leaves the empty store and its
+  lock file, as a refused `write` does), and exit 75 names all three writing verbs.
+- Tests: `cmd/memory/restructure_bin_test.go` and `restructure_busy_bin_test.go` run the unit's
+  eight acceptance criteria through the built binary on the fixture store made with `write`;
+  every successful call is also checked to add no lint error. `internal/memory/delete_test.go`
+  and `retag_test.go` cover the byte-level rules (CRLF, byte-order mark, ID on its own line,
+  ID-less paragraphs), the roll backs (a failed rename, a new error at the reload, a note edited
+  under the call) and the lock.
+- Docs and agent files checked: `docs/spec/agent-memory.md` III.8 already describes both verbs
+  and was not edited. `agent/` is unchanged by design (CLI15 ships the tool files and skills), so
+  `agent/README.md`, the tool descriptions and the guidance still describe only the five earlier
+  verbs, and `memory_write.json`'s "Tags cannot be cleared and blocks cannot be deleted" stays
+  true of `write`. Spec III.1 still says "no lock file except `write`'s"; the README has the
+  current rule.
+- No new dependency. The library still does not log.
+
 ## 2026-11-19 - The README no longer links to a design transcript that is not in the repo
 
 - `README.md`: dropped "The conversation that produced it is in `docs/research/`". That folder is

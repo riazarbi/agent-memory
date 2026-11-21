@@ -15,6 +15,10 @@ type expectation struct {
 	tags        []string
 	props       []Property
 	blocks      []Block // ID and Text only
+	// modified is the text the modified property must read back as, and
+	// hasModified whether the note must carry the key at all (III.9).
+	modified    string
+	hasModified bool
 	// warnings are the reader warnings the note may still carry: those of
 	// the untouched operator content it was rewritten from. Supplied
 	// content may add none.
@@ -48,6 +52,9 @@ func compareNode(got *Node, want expectation) error {
 	}
 	if err := compareProperties(got.Properties, want.props); err != nil {
 		return err
+	}
+	if text, has := modifiedField(got); has != want.hasModified || text != want.modified {
+		return fmt.Errorf("modified reads back as %q (present: %v), want %q (present: %v)", text, has, want.modified, want.hasModified)
 	}
 	return compareBlocks(got.Blocks, want.blocks)
 }

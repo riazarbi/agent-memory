@@ -100,11 +100,11 @@ func adoptLines(src []string, id, eol string) string {
 	return strings.Join(src[:len(src)-1], "") + content + " ^" + id + ending
 }
 
-// rewriteFrontmatter re-emits n's frontmatter with the requested fields
-// changed, from a deep copy of its YAML document (D26). A requested value
-// that decodes equal to the current one is no change. It reports false,
-// and returns no text, when nothing changes.
-func rewriteFrontmatter(n *Node, req changeReq) (string, bool, error) {
+// rewriteFrontmatter returns n's frontmatter document with the requested
+// fields changed, a deep copy for the caller to re-emit (D26). A requested
+// value that decodes equal to the current one is no change. It returns nil
+// when nothing changes.
+func rewriteFrontmatter(n *Node, req changeReq) *yaml.Node {
 	doc := copyYAML(n.Frontmatter.Doc)
 	m := doc.Content[0]
 	changed := false
@@ -120,13 +120,9 @@ func rewriteFrontmatter(n *Node, req changeReq) (string, bool, error) {
 		changed = true
 	}
 	if !changed {
-		return "", false, nil
+		return nil
 	}
-	text, err := encodeYAML(doc)
-	if err != nil {
-		return "", false, fmt.Errorf("encoding frontmatter: %w", err)
-	}
-	return text, true, nil
+	return doc
 }
 
 // mergeProperties updates existing keys in place and appends new ones, in
@@ -170,9 +166,14 @@ func valueIndex(m *yaml.Node, key string) int {
 	return -1
 }
 
-// changeExpectation is what the rewritten note must load back as.
-func changeExpectation(n *Node, req changeReq, body bodyPlan) (expectation, error) {
+// changeExpectation is what the rewritten note must load back as: stamp
+// is the modified value it is given, "" when it keeps what it has.
+func changeExpectation(n *Node, req changeReq, body bodyPlan, stamp string) (expectation, error) {
 	want := expectation{description: n.Description, tags: n.Tags, blocks: body.blocks}
+	want.modified, want.hasModified = modifiedField(n)
+	if stamp != "" {
+		want.modified, want.hasModified = stamp, true
+	}
 	if req.description != nil {
 		want.description = *req.description
 	}

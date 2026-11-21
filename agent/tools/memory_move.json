@@ -1,0 +1,12 @@
+{
+  "command": "memory",
+  "description": "Move a node in your durable memory to a different place in the tree. The first argument is the node's stem; --parent is the stem of the node it should sit under, or / for the top level. Its children move with it. Links to it keep working, because links go by stem and not by place. Use it when a node is right but filed in the wrong place. Example: [\"atlas-cutover\", \"--parent\", \"<parent stem>\"]. If the command exits with code 75 (\"busy\" or \"changed on disk\"), run the same command again.",
+  "read_only": false,
+  "prepend_args": [
+    "--parent-dir",
+    "${AGENT_STATE_DIR}",
+    "move"
+  ],
+  "forbidden_args": [],
+  "allow_user_args": true
+}

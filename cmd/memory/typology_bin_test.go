@@ -331,6 +331,10 @@ const noTypologyHeading = "## III.6 No built-in typology"
 // Acceptance criterion 4: agent/memory/ holds exactly the four starting
 // nodes, each byte-equal to what write <stem> --parent / --description <D>
 // creates on an empty store, with III.6's descriptions; they load clean.
+// Since III.9 a create also writes modified: <time of the call> as the
+// last line of the frontmatter; the shipped notes carry no date, so they
+// equal the created note but for that one line (delivery lead's ruling at
+// CLI16's lock).
 func TestShippedStartingTree(t *testing.T) {
 	shipped := filepath.Join(repoRoot(t), "agent", "memory")
 	files := make([]string, 0, len(starterStems))
@@ -346,9 +350,12 @@ func TestShippedStartingTree(t *testing.T) {
 			t.Errorf("III.6 does not give %s the description %q", stem, desc)
 		}
 		w, parent := freshParent(t)
+		start := time.Now().UTC().Truncate(time.Second)
 		mustSucceed(t, runBin(t, w, nil, "write", stem, "--parent", "/", "--description", desc))
+		end := time.Now().UTC()
 		rel := filepath.Join("notes", stem, stem+".md")
-		want, err := os.ReadFile(filepath.Join(parent, "memory", rel)) //nolint:gosec // a file this test created
+		created := filepath.Join(parent, "memory", rel)
+		made, err := os.ReadFile(created) //nolint:gosec // a file this test created
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -356,8 +363,13 @@ func TestShippedStartingTree(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("agent/memory/%s\n is %q\nwant %q (what write creates)", filepath.ToSlash(rel), got, want)
+		date := modifiedOf(t, created)
+		wantNow(t, stem, date, start, end)
+		// The created note is the shipped one with the date as the last
+		// line of its frontmatter.
+		want := strings.TrimSuffix(string(got), "---\n") + "modified: " + date + "\n---\n"
+		if !strings.HasSuffix(string(got), "---\n") || string(made) != want {
+			t.Errorf("write creates\n%q\nwant agent/memory/%s plus its modified line:\n%q", made, filepath.ToSlash(rel), want)
 		}
 	}
 
@@ -428,7 +440,7 @@ func TestInstallNeverOverwritesAStore(t *testing.T) {
 			before := snapshot(t, mem)
 			runCommandsIn(t, run.dir, state, run.blocks)
 			sameSnapshot(t, before, snapshot(t, mem))
-			for _, f := range []string{"tools/memory_write.json", "prompt/memory_usage.md", "livecontext/memory_index.json"} {
+			for _, f := range []string{"tools/memory_write.json", "prompt/memory_purpose.md", "livecontext/memory_index.json"} {
 				if !exists(filepath.Join(state, filepath.FromSlash(f))) {
 					t.Errorf("%s: %s was not installed beside an existing store", name, f)
 				}
@@ -555,7 +567,7 @@ func TestShippedDescriptionsPresumeNoTypology(t *testing.T) {
 // "area" nor user, projects or topics; the READMEs file nothing under
 // topics, and README.md's Usage shows --parent /.
 func TestGuidanceAndReadmesPresumeNoTypology(t *testing.T) {
-	guidance, err := os.ReadFile(filepath.Join(repoRoot(t), "agent", "prompt", "memory_usage.md"))
+	guidance, err := os.ReadFile(filepath.Join(repoRoot(t), "agent", "prompt", "memory_purpose.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -605,7 +617,10 @@ func TestUsageHasNoSeeding(t *testing.T) {
 
 // Acceptance criterion 6: every verb's output on the shipped starting tree
 // is what it is on the tree CLI6 seeded, which is what four write --parent /
-// calls make: same files, same mtimes, same output.
+// calls make: same files, same mtimes, same output. The written notes are
+// made keyless by hand first: a create dates its note (III.9) and the
+// shipped notes carry no date, so with the key the two trees would differ
+// in every date shown.
 func TestStartingTreeBehavesAsSeeded(t *testing.T) {
 	shippedW, shippedNotes := seeded(t)
 	writtenW, writtenParent := freshParent(t)
@@ -617,6 +632,7 @@ func TestStartingTreeBehavesAsSeeded(t *testing.T) {
 	for i, stem := range starterStems {
 		rel := filepath.Join(stem, stem+".md")
 		at := mt.Add(time.Duration(i) * 24 * time.Hour)
+		keyless(t, filepath.Join(writtenNotes, rel))
 		setMtime(t, filepath.Join(shippedNotes, rel), at)
 		setMtime(t, filepath.Join(writtenNotes, rel), at)
 	}

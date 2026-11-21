@@ -483,8 +483,11 @@ Related: [[escalation]], [[people#^m-22be7q]]. ^m-0d4e9x
 - **Dropped: `type`.** The harness assigns no type. If a protocol's first
   level is a type ontology, reading a node's type from its first-level
   ancestor is that protocol's convention (D19).
-- **Not stored: `modified`.** The harness renders mtime onto the wire;
-  storage keeps only what only the model knows.
+- **Stored: `modified`** (III.9, operator ruling 2026-11-21, reversing "Not
+  stored: `modified`. The harness renders mtime onto the wire; storage keeps
+  only what only the model knows"). The file's time turned out not to be the
+  content's age: it is reset by a link rewrite and by any copy that drops
+  file times.
 - **Not structural: `status`, `source`.** Claim status and provenance are
   a verification protocol's conventions, written as inline fields on
   blocks (§4.6).
@@ -585,7 +588,8 @@ its subtree) out of the store; a **warning** loads it and reports.
 - Files are read as UTF-8; a leading byte-order mark and CRLF line endings are
   tolerated. An unreadable folder note or folder → **error** for that node
   (and its subtree) only.
-- A node's `modified` is its folder note's mtime.
+- A node's `modified` is its stored `modified` property when that can be
+  read as a date, else its folder note's mtime (III.9).
 
 **Frontmatter** — the file must start with a `---` YAML block holding a
 mapping; missing or unparseable → **error**. Obsidian-lenient where Obsidian
@@ -672,7 +676,8 @@ Properties are carried through untouched (D23), so a write must not alter
 what it was not asked to change. The rule is a hybrid:
 
 - **A write that changes no frontmatter field** (e.g. appending or replacing
-  a block) copies the frontmatter bytes exactly as read.
+  a block) copies the frontmatter bytes exactly as read, except the one
+  `modified` line (III.9).
 - **A write that changes fields** re-emits the frontmatter from its YAML node
   tree, changing only those fields. Every other property keeps its value,
   type, YAML tag, key order, quoting and scalar form — a date stays a date
@@ -771,7 +776,7 @@ before any output is produced:
 - `description`: empty, or not a single line;
 - a tag not in Obsidian tag syntax (a leading `#` is stripped first);
 - a property key that is empty or multi-line, or `description`/`tags`
-  passed as properties;
+  passed as properties, or the key `modified` (III.9);
 - a property value that is not a string, number, boolean, null, or list of
   strings (nested objects, lists of non-strings);
 - block text that is empty, spans more than one paragraph (contains a blank
@@ -804,10 +809,12 @@ Rulings ratified at U5 banking (2026-11-15):
   (yaml.v3 mis-emits more than dates and numbers — `<<`, strings that are
   only line breaks).
 - **An untouched operator value that cannot be re-emitted faithfully** (e.g.
-  a literal block holding a raw U+2028) makes the encoder refuse any
+  a keep-chomped literal block, `note: |+`, whose one line is a bare U+2028;
+  most other literal blocks holding one round-trip or fail to load) makes the encoder refuse any
   frontmatter change to that node — safe, but that node's frontmatter is
   edit-locked until the operator fixes the value. Body-only changes are
-  unaffected (the frontmatter bytes are copied).
+  unaffected (the frontmatter bytes are copied, but for the `modified` line,
+  III.9).
 
 **Known limits:** store-wide ID uniqueness covers only nodes that loaded — an
 ID inside a node the reader skipped (malformed) is invisible and may be
@@ -1119,7 +1126,7 @@ indent two spaces):
   nested one level (depth 2), as `memory_read` renders child entries:
   `<node stem tags children modified>description</node>` — `tags` comma
   joined and omitted when empty, `children` the node's true child count,
-  `modified` the folder note's mtime as `YYYY-MM-DD` in `AGENT_TIMEZONE`.
+  `modified` the node's date (III.9) as `YYYY-MM-DD` in `AGENT_TIMEZONE`.
   Children in the store's order.
 - Then `<omitted nodes="N">…</omitted>` when the budget dropped entries.
 - Then `<tags>`: tags across every loaded node with node counts,
@@ -1132,7 +1139,7 @@ indent two spaces):
 **The budget.** The rendered `<memory_index>` element, from `<memory_index>`
 to `</memory_index>` inclusive, may hold at most **200 lines and 25,000
 bytes**. Over either, entries are dropped one at a time until both hold:
-second-level entries first, oldest first (by the folder note's mtime, ties
+second-level entries first, oldest first (by the node's date, III.9, ties
 by stem), then first-level entries in the same order. The trust line, the
 notice and `<tags>` are never dropped, and the notice counts towards the
 budget. A parent's `children` keeps the true count, so a gap is visible
@@ -1221,7 +1228,7 @@ the system prompt, never reaches `context/`.
   split, merge, delete, rename a tag (creating at the root is an ordinary write since CLI7, III.6). Structure, not
   method: the harness provides them generically, every move rewrites
   inbound block links (§4.3), and a run gets them only if its protocol
-  grants them (D13). Their exact shape is open (§6).
+  grants them (D13). Their shape is III.8 (2026-11-20): seven verbs, one tool file each.
 - **Shipping:** catalogued like any built-in. `memory_read` and
   `memory_write` markers reach existing installs once through a
   seed-generation bump (`seedGeneration` + `builtinSinceGeneration`); a
@@ -1246,48 +1253,14 @@ appear only while their tool is registered; the capability line, the index's
 trust preamble and the index itself are generated by the harness. Nothing is
 said twice.
 
-The default guidance — shipped verbatim as `agent/prompt/memory_usage.md` (Part III.4; it was once
-seeded as `usage.md`) — distilled from Claude
-Code's memory instructions, its notes-and-feedback rules, its per-type save
-guidance and its lean hygiene rewrite, adapted to this design:
+*(Replaced by III.8, built as CLI15: the every-turn text is `agent/prompt/memory_purpose.md`,
+which says only what memory is for. The guidance that stood here, "What to save", "How to write
+it" and "Before you answer", is now the body of the skills `memory-capture` and `memory-usage`.
+All three texts are in III.8, *The prompt and the skills*, and the shipped files are pinned to
+them there.)*
 
-```markdown
-# Memory
-
-You have a durable memory: notes that outlive this conversation, kept as a
-tree of nodes. Its index, when you are shown one, lists the top-level nodes,
-their children and the tags in use; that is its structure. What you can do
-with it is exactly what your memory tools allow.
-
-## What to save
-Save a claim only if it would still matter if this conversation were cleared
-today, and you could not work it out again from files or a live lookup:
-- a correction or stated preference — and quiet confirmations that an unusual
-  approach was right, not only corrections;
-- who is doing what, why, and by when;
-- facts about people and things you deal with that you would otherwise have
-  to ask about again.
-Nobody may be watching (mailbox, watch): save what you worked out, not only
-what you were told. If you are unsure whether something is durable, it isn't.
-
-Never save: what you can re-read or re-derive; progress on the current task;
-records of finished work; secrets.
-
-## How to write it
-- One claim per block, written for a stranger: turn "today", "Thursday",
-  "this one", "the one we discussed" into dates and names.
-- For a rule, say why it holds and when it applies.
-- Mark your own interpretation as yours, not as fact.
-- Search before adding: update the existing note rather than starting a second.
-- File it under the node it belongs to, as the index shows the tree — don't
-  hunt for a deep location. Start a new top-level node only when nothing in
-  the tree fits.
-
-## Before you answer
-For questions about the operator's preferences, people, or past work, check
-the index and read the relevant node first. A note can be stale: re-check
-anything it says about files or the outside world before acting on it.
-```
+That guidance was distilled from Claude Code's memory instructions, its notes-and-feedback rules,
+its per-type save guidance and its lean hygiene rewrite, adapted to this design.
 
 Deliberately omitted from Claude Code's version: the mandatory "audit every
 reply for saves" regime (fragile #1 — revisit against our own experience
@@ -1504,7 +1477,7 @@ of such an alternative matches. A node matched only by its stem,
 description, tags, path or properties has no hit blocks.
 
 **Ranking and caps.** Matching nodes are ordered by number of hit blocks
-(most first), then folder-note mtime at full precision (newest first),
+(most first), then the node's date (III.9) at full precision (newest first),
 then stem. At most 20
 nodes are shown; each shows its hit blocks in file order, at most 5.
 
@@ -1635,14 +1608,15 @@ architecture:
   let pages emerge from references) points the same way.
 - **Tag hygiene:** merging synonym tags is a main job of the dream; a
   cluster of blocks sharing a tag is a split candidate named by that tag.
-- **The first level is the operator's** *(revised by CLI7)*: any run with
-  `write` may add a first-level node, but no run moves, renames or deletes
-  one; the dream works inside the tree it finds.
+- **Only the root is fixed** *(revised by CLI7, then by III.8, 2026-11-20; formerly "the first
+  level is the operator's")*: any run with `write` may add a first-level node, and a run granted
+  the restructuring tools may move, rename, merge, split or delete any node, first-level ones
+  included. What a run may do to the tree is decided by the tool files the operator installs.
 - **No claim status.** The default protocol is a memory store with
   Claude Code-style correction: gather by suspicion (drift first, then
   narrow searches of evidence), fix drift and contradictions at the
   source, keep `Why:` lines as grounds. This is the part the corpus backs.
-- **`usage.md`** as in §4.5.
+- **The purpose text and the skills** as in III.8 (formerly `usage.md`, §4.5).
 
 ### Verification is a protocol, not a store feature (D10)
 
@@ -1837,7 +1811,7 @@ creates a node on its own (III.6).
   "reading a missing store creates nothing"). Every verb, once its arguments have passed (III.2),
   creates `<parent>/memory` and `<parent>/memory/notes` as needed (mode 0755, forced on what it
   creates; a directory that already exists keeps its mode; another process creating it first is
-  fine), and nothing else: no node, and no lock file except `write`'s. Then it reports on the empty
+  fine), and nothing else: no node, and no lock file except the one a writing verb takes (`write`, and the restructuring verbs, III.8: `delete`, `retag`, `move`, `rename`, `move-block`, `split`, `merge`). Then it reports on the empty
   store: `read` with no stem prints the root with no nodes and no tags; `read STEM` is the
   unknown-stem error; `search` prints `matched="0"`; `index` prints the empty index (III.2); `lint`
   prints `nodes="0" errors="0" warnings="0"`. Once `notes/` exists, `read`, `search`, `index` and
@@ -1860,8 +1834,10 @@ creates a node on its own (III.6).
 
 - **Argument errors name the argument as the user typed it** (`STEM`, `--parent`, `--add #2`,
   `--replace m-abc123`), never the writer's internal field names.
-- **`write` cannot clear tags or delete blocks.** Both are restructuring operations, which stay
-  open (§6).
+- **`write` cannot clear tags or delete blocks.** Both are restructuring operations: `retag` and
+  `delete` (III.8).
+- **The restructuring verbs** `move`, `rename`, `move-block`, `split`, `merge`, `delete` and
+  `retag` are specified in III.8, with their arguments, refusals and results.
 - **The overflow notice** in `index` cannot name a tool, because the CLI does not know which tool
   files the operator installed. It reads `N nodes not shown: read a node to list all its children.`
   (`node` for one).
@@ -1892,7 +1868,9 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 | Repo file | Copied to | What it is |
 |---|---|---|
 | `agent/tools/memory_read.json`, `memory_write.json`, `memory_search.json`, `memory_index.json`, `memory_lint.json` | `<state dir>/tools/` | The shell tools (`memory_lint.json`: III.7). |
-| `agent/prompt/memory_usage.md` | `<state dir>/prompt/` | The guidance: when and what to save (the §4.5 text, verbatim). A `prompt/` fragment, loaded every turn. |
+| `agent/prompt/memory_purpose.md` | `<state dir>/prompt/` | What memory is and what it is for (III.8's text, verbatim), and nothing else. A `prompt/` fragment, loaded every turn. Until CLI15 this was `memory_usage.md`, which also held the how-to that is now in the skills; an install that has the old file deletes it. |
+| `agent/tools/memory_move.json`, `memory_rename.json`, `memory_move_block.json`, `memory_split.json`, `memory_merge.json`, `memory_delete.json`, `memory_retag.json` (III.8, CLI15) | `<state dir>/tools/` | The restructuring tools, one per verb, each installed or left out. |
+| `agent/skills/memory-usage/`, `memory-capture/`, `memory-restructure/`, each holding `SKILL.md` (III.8, CLI15) | `<state dir>/skills/` | How to consult memory, how to save to it, how to reorganise it. Read when the model loads them. |
 | `agent/livecontext/memory_index.json` | `<state dir>/livecontext/` | The index at the start of each input. |
 | `agent/memory/notes/<stem>/<stem>.md` for `user`, `projects`, `people`, `topics` | `<state dir>/memory/notes/` | An optional starting tree (III.6), copied only into a store that does not exist yet. |
 | `agent/README.md` | — | What each file is, where it goes, and the rules below. |
@@ -1911,7 +1889,10 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 - **The live-context entry** is `{"command": "memory", "description": …, "args": ["--parent-dir",
   "${AGENT_STATE_DIR}", "index"]}`, substituted the same way. Installing it is optional: the index
   can instead be a tool (`memory_index.json`) or nowhere.
-- **The guidance** is a `prompt/` fragment, so it loads whether or not the tools are installed. This
+- **The skills** (III.8, CLI15) are copied as folders, `agent/skills/<name>/` to
+  `<state dir>/skills/<name>/`. The agent lists each skill's name and description on every turn
+  and reads a body only when the model loads it.
+- **The guidance** (since CLI15 the purpose text) is a `prompt/` fragment, so it loads whether or not the tools are installed. This
   reverses D15's gating, which needed agent code. The operator who chooses the tools chooses the
   guidance: install it with the tools, edit it to match, or leave it out. It is no longer seeded
   into `memory/protocol/`; the protocol bundle (D24) has no seeded files for now.
@@ -1931,7 +1912,8 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 
 - (CLI3) If the trust line, the notice and `<tags>` alone exceed the budget (50 very long tags),
   `index` drops every entry and prints the result over budget.
-- (CLI3) The four verb tools' descriptions (read, write, search, index) say exit 75 means "run
+- (CLI3; since CLI15 the seven restructuring tools' descriptions say it too, correctly, since
+  those verbs can return it) The four verb tools' descriptions (read, write, search, index) say exit 75 means "run
   again", though only `write` can return it. `memory_lint.json`'s does not (CLI9).
 - (CLI3) Re-running the release job on an already-released commit publishes a `.2` release with
   empty notes.
@@ -1942,7 +1924,8 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
   (as every flag here takes its next argument). Since CLI6 that fails unless a directory named
   `--parent-dir` exists. No tool file can produce it.
 - (CLI7) The model can add first-level nodes but no verb removes, moves or renames one, so a top
-  level the model has sprawled is pruned by the operator, by hand.
+  level the model has sprawled is pruned by the operator, by hand. Closed by III.8's verbs once
+  built.
 - (CLI7, CLI10) A `write` refused on a missing store after its argument parsing (an unknown
   parent, an invalid stem, an empty description or a bad tag, all checked by the writer) still
   leaves the empty `memory/notes/` (as every verb now does) and its lock file.
@@ -1971,8 +1954,8 @@ material (skills) goes here the same way, as `agent/skills/<name>/`.
 
 ## III.5 Not in the CLI
 
-Restructuring verbs, dreaming and the audit (§4.6, §6), a capability line, an install command, a
-Docker image, and any agent-side change.
+Dreaming and the audit (§4.6, §6), a capability line, an install command, a Docker image, and any
+agent-side change. The restructuring verbs were on this list until III.8 (2026-11-20).
 
 
 ## III.6 No built-in typology (CLI7, operator ruling 2026-11-19)
@@ -1992,14 +1975,16 @@ changes it by rearranging folders.
   - `/` is never a node's own stem: `write /` is an error naming `STEM` (the root has no content
     and cannot be written).
   - In the library's write request the root parent is the string `/` too.
-- **Who changes the top of the tree.** Any run granted `write` can add a first-level node. No verb
-  moves, renames, merges, splits or deletes a node, so the model can add to the top of the tree but
-  never remove from it. The operator rearranges by hand: a node is a folder holding
+- **Who changes the top of the tree.** Any run granted `write` can add a first-level node. A run
+  granted the restructuring tools (III.8) can move, rename, merge, split or delete any node but
+  the root; a run without them can add to the top of the tree but never remove from it. The
+  operator can always rearrange by hand: a node is a folder holding
   `<folder>/<folder>.md` with a one-line `description` in its frontmatter (§4.2), so renaming,
   moving or deleting folders (in a file manager or Obsidian) reshapes the tree.
 - **The starting tree is a shipped example.** `agent/memory/notes/` holds four first-level nodes,
   each `<stem>/<stem>.md` byte-equal to what `memory write <stem> --parent / --description <D>`
-  creates: `user` ("Who the operator is and how they want work done"), `projects` ("Ongoing
+  creates, but for the `modified` line a create writes (III.9; the shipped notes carry none and
+  take their date from their files): `user` ("Who the operator is and how they want work done"), `projects` ("Ongoing
   efforts, goals, incidents and commitments"), `people` ("Who is who, and how to deal with them"),
   `topics` ("Everything else worth knowing"). The operator copies it, edits it, makes their own, or
   leaves it out. It is copied only into a store that does not exist yet:
@@ -2030,7 +2015,7 @@ changes it by rearranging folders.
   - `memory_index.json`: "the top-level areas and their children" becomes "the top-level nodes and
     their children".
   - `livecontext/memory_index.json`: "its top-level areas" becomes "its top-level nodes".
-  - The guidance: §4.5's text as revised in this ruling.
+  - The guidance: §4.5's text as revised in this ruling. (Since CLI15 that text is III.8's purpose text and skills.)
 - **Supersedes** in Part II: the seeding paragraphs (§4.2 *Seeding and the ontology*, §4.5
   *Seeding*), the first-level rule in D28's create ("never the root"), and §4.6's "the first level is
   fixed", each revised in place.
@@ -2085,11 +2070,779 @@ skips what it cannot load (D25), and a skipped node silently disappears from `re
   > path and the reason. An error means that node, and everything under it, could not be loaded: it
   > is missing from your memory until it is fixed, and your memory tools cannot fix it, so tell the
   > operator. A warning means the node loaded but something is off: a link to a missing node (fix it
-  > by creating that node or rewriting the block), a block ID used twice, or a file that is not a
+  > by creating that node or rewriting the block), a block ID used twice, a modified date that
+  > cannot be read (it is replaced the next time you change that node), or a file that is not a
   > node (tell the operator). errors="0" warnings="0" means the store is clean. Takes no arguments.
 
   It never mentions exit 75 (`lint` cannot be busy) or `--exit-zero`. Installing it is optional,
   like every tool file; a cron job or git hook uses plain `lint` and its exit code.
+
+## III.8 Restructuring verbs, the purpose text and the skills (operator rulings 2026-11-20)
+
+*Agreed with the operator on 2026-11-20 and built as CLI11–CLI15; the units are listed at the end
+of the section. The rulings: split and merge are verbs in their own right, not recipes; `split` states
+where the new node goes (`--parent`, required); `merge` unions tags and keeps the target's
+description; `delete` refuses a node with children unless told to recurse; the root is the only
+fixed node, and every other node, first-level ones included, can be moved, renamed, merged, split
+and deleted; `retag OLD` is how a tag is cleared; the prompt file says only what memory is for,
+and everything about using it ships as skills.*
+
+The verbs `write` cannot express: the ones that remove or relocate. Seven of them. Each is one
+call, takes the write lock and follows D28 (fresh load under the lock, atomic replaces, read-back,
+roll back on failure, exit 75 for "busy" and "changed on disk"), so a failed call leaves the store
+exactly as it was.
+
+| Verb | Arguments | Does |
+|---|---|---|
+| `move` | `STEM --parent P` | Moves the node and its subtree under `P` (`/` for the root). No link changes: node links resolve by stem (§4.3). |
+| `rename` | `STEM NEW` | Changes the node's stem, folder and folder note. Rewrites every `[[STEM]]` and `[[STEM#^id]]` in the store to `NEW`. |
+| `move-block` | `ID --to STEM` | Moves one block to the end of `STEM`, keeping its ID. Rewrites every inbound `[[old#^ID]]` to `[[STEM#^ID]]`. |
+| `split` | `STEM --into NEW --parent P --description D --block ID [--block ID]…` | Creates `NEW` under `P` and moves the named blocks of `STEM` into it, in argv order, keeping IDs. Rewrites inbound block links. `STEM` stays where it is and may be left with no blocks. |
+| `merge` | `FROM --into TO` | Moves every block of `FROM` to the end of `TO` (file order, IDs kept), moves `FROM`'s children under `TO`, rewrites `[[FROM]]` and `[[FROM#^id]]` to `TO`, adds `FROM`'s tags to `TO`'s, then removes `FROM`. `TO` keeps its description and properties. |
+| `delete` | `STEM [--block ID] [--recursive]` | With `--block`, removes that block. Without, removes the node; a node with children is refused unless `--recursive`, which removes the subtree. |
+| `retag` | `OLD [NEW]` | Replaces tag `OLD` with `NEW` on every node that has it; with no `NEW`, removes `OLD`. A node that already has `NEW` ends with it once. |
+
+- **The root is the one fixed node** (III.6, unchanged). `/` is accepted only as a `--parent`
+  (`move`, `split`). It is never `STEM`, `FROM`, `TO` or `NEW`: an error naming the argument.
+- **Every other node is fair game**, first-level nodes included. This replaces III.6's "no verb
+  moves, renames, merges, splits or deletes a node" and §4.6's "no run moves, renames or deletes"
+  a first-level node. What a run may do is decided by which tool files the operator installs.
+- **Refusals** (one line on stderr, exit 1, naming the argument as typed):
+  - an unknown stem or block ID (stems list near matches, III.3);
+  - `move` under itself or its own descendant; `move` to the parent it already has is a no-op,
+    exit 0, nothing written;
+  - `rename` or `split` to a stem that exists or is not valid stem syntax;
+  - `merge` when `TO` is `FROM` or a descendant of `FROM` (a child merges up into its parent; a
+    parent does not merge into its child);
+  - `split` naming a block that is not in `STEM`, or the same block twice; `split` with no
+    `--parent`, or a `--parent` that is not a loaded node or `/`;
+  - `move-block` to the node the block is already in;
+  - `delete` of a node with children and no `--recursive`.
+- **`delete`, exactly** (CLI11; operator rulings 2026-11-20).
+  - `delete STEM --block ID` removes that one block from `STEM`'s folder note and changes nothing
+    else in it. A node may be left with no blocks. `--block` with `--recursive` is an error
+    naming `--recursive`; an ID that is not a block of `STEM` is an error naming `--block`.
+  - `delete STEM` removes the node's folder. It is refused, exit 1, when the folder holds
+    anything besides the folder note: child nodes, a child folder that did not load, or any
+    other file. The message names `STEM`, says what else is there (`2 children`, or the first
+    such entry by name) and says to add `--recursive`. So a plain delete never removes something
+    the caller could not see. Dot-entries (`.DS_Store`, a leftover temporary file) are not
+    content: they do not cause a refusal and go with the folder.
+  - `delete STEM --recursive` removes the folder and everything in it, loaded or not.
+  - The folder is first renamed to a hidden name beside itself (`.<stem>.deleting`, a dot-entry,
+    ignored by the reader and by Obsidian), so a failure part-way never leaves half a node
+    visible. The store is then reloaded: if it has an error it did not have before, the folder
+    is renamed back and the call fails. Only then is the hidden folder removed. *(Corrected at
+    CLI11's banking: the first wording removed the folder before the reload, which cannot be
+    undone.)*
+  - With both children and other entries in the way, the refusal names both:
+    `has 2 children and its folder also holds "zz.txt"`.
+  - `<dangling>` lists every link, in a block of a node that still exists, whose target was a
+    deleted node or a block of one (or, for a block delete, that block, including links from
+    other blocks of the same node). Order: by holding node's stem, then that node's block order,
+    then the link's position in the block. A link that was already dangling before the call is
+    not listed. The same link written twice in a block is listed twice. A holding paragraph
+    that has no ID yet has no `block` attribute.
+- **`move`, exactly** (CLI12).
+  - `move STEM --parent P` renames the node's folder into `P`'s folder (`notes/` itself for `/`).
+    It is one directory rename: no note is rewritten, every file keeps its bytes and mtime, and
+    whatever else is inside the folder (unloaded children, stray files) goes with it.
+  - Refused, exit 1: `P` unknown (near matches listed, III.3); `P` is `STEM` or a descendant of
+    `STEM`; an entry named `STEM` already exists in `P`'s folder (it can only be something that
+    did not load, since stems are unique among loaded nodes).
+  - `P` already `STEM`'s parent: exit 0, the result element as usual, nothing written.
+  - The store is reloaded after the rename; on an error it did not have before, the folder is
+    renamed back and the call fails.
+- **`rename`, exactly** (CLI12).
+  - `rename STEM NEW` renames the folder to `NEW` and its folder note to `NEW.md`, where they
+    are, and rewrites the target of every link to the node: `[[STEM]]`, `[[STEM|alias]]`,
+    `[[STEM#^id]]` and `[[STEM#^id|alias]]` become the same with `NEW`. Aliases and block IDs are
+    kept. The links are the ones the reader sees as edges (D25): a link inside inline code or an
+    unsupported `[[…]]` form is text and is left alone.
+  - Links are rewritten wherever they are, the renamed node's own blocks included. In each
+    rewritten note only the link targets change; every other byte stays. Notes with no link to
+    the node are not written and keep their mtime.
+  - `links_rewritten` counts links, not blocks or notes.
+  - Refused, exit 1: `NEW` is not valid stem syntax (D25); `NEW` is a loaded node's stem, `STEM`
+    itself included; an entry named `NEW` already exists beside the node's folder; a file
+    `NEW.md` already exists inside it.
+  - **`NEW` is checked as strictly as `write` checks a new stem** (ruled at CLI12's banking;
+    built in CLI13): it is also refused when any folder in the tree already carries it, loaded
+    or not, and when it differs from such a folder's name only by case (D28's create rules).
+    `split`'s `NEW` follows the same rule. CLI12 as built checks loaded stems and the entry
+    beside the folder only.
+  - Argument checks run in this order: `NEW`'s syntax (before the store is created), `STEM`
+    unknown, then the collisions. `rename a b c` names the surplus argument, `"c"`.
+  - A link `[[NEW]]` that was dangling before the call resolves to the renamed node afterwards.
+    It is not counted in `links_rewritten`, because it is not rewritten.
+  - The description, tags and properties are not changed.
+  - All or nothing: if any note cannot be replaced, or the reload shows an error the store did
+    not have before, every rewritten note is restored, the folder and note get their old names
+    back, and the call fails.
+- **`move-block`, exactly** (CLI13).
+  - `move-block ID --to STEM` takes the block with that ID out of the node that holds it and adds
+    it as the last block of `STEM`, with the same ID and the same text. It is removed from its
+    old note exactly as `delete --block` removes a block (nothing else in that note changes
+    except link targets, below). Its old node may be left with no blocks.
+  - **It is appended to `STEM`'s note and nothing else in that note changes** (operator ruling
+    2026-11-20, replacing "exactly as `write --add` adds a block"). The block is written as one
+    new last paragraph, its text followed by a space and `^ID`, after exactly one blank line,
+    with the note's own line ending and a final line ending. Every byte already in the note
+    stays, link targets apart: a hand-written paragraph with no ID is **not** given one, runs of
+    blank lines are not collapsed, and the frontmatter is not re-emitted. This is how `delete
+    --block`, `retag` and `rename` treat a note, and unlike `write`, which adopts ID-less
+    paragraphs and reports them.
+  - Settled at CLI13's banking (2026-11-20), as built: a note that already ends in blank lines
+    keeps them and gets none added, so the block may follow more than one blank line ("exactly
+    one" is what is added when there is none). A note with no blocks gets the block after its
+    frontmatter, laid out as `write` lays out a first block, and blank lines that followed the
+    frontmatter are dropped: the one exception to "every byte stays". A block whose ID sat on
+    its own line arrives as `text ^ID`; a block that is only an ID arrives as `^ID`. The line
+    ending is the target note's (its opening delimiter line's).
+  - The moved block keeps the reader warnings its text already had (an unsupported link form, an
+    embed). They are then reported under its new node; that is not a new warning.
+  - Every link to the block, `[[old#^ID]]` and `[[old#^ID|alias]]`, becomes the same with `STEM`,
+    wherever it is: in other nodes, in the old node's remaining blocks, in `STEM`'s blocks, and
+    in the moved block itself. Aliases are kept. Links to the old *node* (`[[old]]`) are not
+    touched: the node is still there. Links the moved block holds to other things move with its
+    text, unchanged.
+  - `links_rewritten` counts links. Only notes that change are written: the old note, `STEM`'s
+    note, and notes holding a link to the block.
+  - Refused, exit 1: no block has that ID (names `ID`); the ID is carried by more than one block
+    (a lint warning, III.7: the call cannot tell which is meant; twice within one node counts
+    too); `--to` missing, unknown (near
+    matches listed) or `/` (the root holds no blocks); the block is already in `STEM`.
+  - `ID` is given as `read` prints it (`m-7f3a2k`), not normalised.
+  - Checks run in this order: missing arguments and `--to /` (before the store is created), `ID`
+    unknown, `ID` carried more than once, `--to` unknown, the block already in `STEM`.
+  - A link `[[STEM#^ID]]` that was dangling before the call resolves afterwards and is not
+    counted, as with `rename`'s `[[NEW]]`. A link naming the ID under some other node is left
+    alone.
+  - All or nothing, as `rename`, with `rename`'s known gaps: the crash window, an outside edit
+    during the call (exit 75, no roll back; the window between the replace and the reload has
+    no test for `move-block`), and restored notes carrying new mtimes. The duplicate-ID check
+    sees loaded notes only: an ID also present in a note that did not load is invisible to it.
+- **`split`, exactly** (CLI14).
+  - `split STEM --into NEW --parent P --description D --block ID [--block ID]…` creates the node
+    `NEW` under `P` (`/` for the root) and moves the named blocks of `STEM` into it, in the order
+    the `--block` flags are given, with their IDs and text. `STEM` stays where it is with the
+    blocks not named, and may be left with none.
+  - `NEW` is created as `write NEW --parent P --description D` creates a node: the same checks
+    on `NEW` (D28's create rules, as `rename`), on `P` and on `D`, the same folder, modes and
+    note layout. Its note is byte-equal to the note a `write` create with one `--add` per moved
+    block would make, except that each block carries its own ID and the two calls' `modified`
+    values (III.9). It gets no tags and no
+    properties: `STEM`'s are not copied (decided 2026-11-20 without the operator, for review;
+    a `write --tag` afterwards sets them).
+  - `P` may be `STEM` itself (the new node is its child), any node under it, or any other node.
+  - Each block leaves `STEM`'s note as `delete --block` removes a block. Every link to a moved
+    block, `[[STEM#^ID]]` in any form, becomes `[[NEW#^ID]]`, wherever it is, the moved blocks'
+    own text included. Links to the node `STEM` are not touched.
+  - `blocks` is the number moved, `left` the number remaining in `STEM`, `links_rewritten` the
+    links rewritten.
+  - Refused, exit 1: `--into`, `--parent`, `--description` or every `--block` missing; a
+    `--block` that is not a block of `STEM` (names `--block` and the ID); the same ID twice; an
+    ID carried by more than one block (as `move-block`); `STEM` or `P` unknown; `NEW` refused
+    by `write`'s create rules; `/` as `STEM` or `NEW`.
+  - All or nothing, as `rename`: after a failure no folder `NEW` is left behind.
+  - Settled at CLI14's banking (2026-11-21), as built:
+    - Checks run in this order. Before the store is created: `/`, an invalid `NEW`, a missing
+      flag (the first missing of `--into`, `--parent`, `--description`, `--block`), a bad
+      description, the same ID twice. Then: `STEM` unknown; each block (not in `STEM`, then
+      carried by more than one block); `NEW` a loaded node's stem (its own message, "in use by
+      the node at …", since `write` would treat that as an update); `P` unknown (near matches
+      listed, as every unknown stem); `write`'s create check.
+    - The new node is made first, then the other notes are replaced, so a crash leaves a moved
+      block in both notes, never in neither.
+    - Several blocks leave `STEM` as that many `delete --block` calls would, one after another.
+    - A moved block is not re-validated as `write` validates new text: it keeps the reader
+      warnings it had, as with `move-block`. The byte-equality with a `write` create holds for
+      blocks `write` could have written, with the texts as they read after retargeting.
+    - `links_rewritten` counts links inside the moved blocks too.
+- **`merge`, exactly** (CLI14).
+  - `merge FROM --into TO` folds `FROM` into `TO` and removes `FROM`:
+    - `FROM`'s blocks are appended to `TO`'s note in `FROM`'s file order, each as `move-block`
+      appends a block (III.8, *`move-block`, exactly*): IDs and text kept, nothing else in
+      `TO`'s body changed.
+    - Everything in `FROM`'s folder except its folder note and dot-entries moves into `TO`'s
+      folder: its child nodes with their subtrees, and anything that did not load (the
+      Postcondition's "carry along"). `children` counts the loaded child nodes moved.
+    - Every link to `FROM`, `[[FROM]]` and `[[FROM#^id]]` in any form, becomes the same with
+      `TO`, wherever it is, including in `TO` (where it becomes a link to itself) and in the
+      moved blocks.
+    - `TO`'s tags become `TO`'s tags followed by those of `FROM`'s it lacks, in `FROM`'s order;
+      `tags_added` counts them. The frontmatter is re-emitted only when a tag is added (D26, as
+      `retag`).
+    - `TO` keeps its description and properties. `FROM`'s description and properties are
+      discarded with its note.
+    - `FROM`'s folder, then holding only its note and dot-entries, is removed as `delete`
+      removes a node.
+  - Refused, exit 1: `--into` missing; `FROM` or `TO` unknown; `TO` is `FROM`; `TO` is a
+    descendant of `FROM` (merge the child into the parent instead); `/` as `FROM` or `TO`; an
+    entry that would move into `TO`'s folder has the name of an entry already there (names the
+    entry; decided 2026-11-20 without the operator, for review).
+  - A child merges up into its parent like any other merge: its children land beside it.
+  - All or nothing, as `rename`, with `rename`'s and `delete`'s known gaps.
+  - Settled at CLI14's banking (2026-11-21), as built:
+    - Errors name the first argument `FROM`. The carried-entry collision names `--into` and the
+      entry; it also catches a name that differs only by case on a case-insensitive filesystem,
+      a stray file named like `TO`'s note, and, on a merge upward, an entry named like `FROM`'s
+      own folder.
+    - A hand-written paragraph of `FROM` with no ID moves as text without an ID and counts in
+      `blocks`. `children` counts loaded child nodes only.
+    - `links_rewritten` counts links to `FROM` inside `FROM`'s own blocks.
+    - If `FROM` and `TO` each hold a block with the same ID (a lint warning before the call), the
+      merge is refused and nothing changes: the result would be one note carrying an ID twice.
+      The message is the encoder's generic one. `tags_added` counts each lacking tag once, even
+      if `FROM` lists it twice.
+    - `FROM`'s note must still hold the bytes that were read (exit 75 otherwise), since it is
+      discarded. A `TO` note that gains nothing is not written.
+    - Dot-entries in `FROM`'s folder are destroyed with it, as `delete` does.
+    - Known gaps: a crash after the notes are replaced and before the entries move leaves links
+      pointing at `TO` while `FROM` still exists with its blocks; an outside edit found at the
+      reload exits 75 with the merge complete on disk; symlinked folders and a `TO` on another
+      device are untested (a cross-device rename fails and rolls back).
+- **`retag`, exactly** (CLI11; operator rulings 2026-11-20).
+  - It changes both places a tag lives: a node's frontmatter `tags`, and inline `#tag` words in
+    block text, located as `search` locates them (D31: `#` at the start of the text or after
+    whitespace, then the longest run of tag characters that is a valid tag; inline code is not
+    special). Only the tag token is rewritten; every other byte of the block stays.
+  - **Matching is exact, case included** (operator ruling at CLI11's banking). `retag misc`
+    leaves `Misc` and `#MISC` alone, although `search tag:misc` folds case and finds them. The
+    index lists `Misc` and `misc` as two tags, and `retag Misc misc` is how they are folded
+    into one.
+  - Nested tags go with their parent: `retag project proj` turns `project/atlas` into
+    `proj/atlas`, and `retag project` removes `project` and every `project/…` tag. Matching is on
+    whole path segments, so `projects` is not touched by `retag project`.
+  - Removing an inline tag removes the `#tag` token and one adjacent space, so no double space is
+    left: the space before it; the space after it when the tag starts the text or a line; its
+    line break when it is alone on a line. A block that would be left with no text, with a blank
+    line inside it, or with a line that now starts with a list, quote or heading marker is not
+    rewritten: the call fails naming the block, and nothing is written (delete the block, or
+    reword it, instead).
+  - A node that ends with the same tag twice in its frontmatter keeps it once, at the first
+    position.
+  - `OLD` and `NEW` are given with or without a leading `#` and must be valid tags (D17); `NEW`
+    equal to `OLD` writes nothing, `nodes="0"`.
+  - `nodes` in the result counts the nodes whose file changed. Only those files are written.
+- **Known gaps, recorded not fixed** (CLI11 acceptance, 2026-11-20):
+  - If the hidden folder cannot be removed after the reload passed (a permissions fault inside
+    the store), `delete` exits 1 naming the leftover `.<stem>.deleting`; the node is already
+    gone and the dangling links are not reported. This is the one case where a failed call does
+    not leave the store as it was. `lint` then lists the newly dangling links.
+  - A crash between the rename and the removal leaves `.<stem>.deleting` behind. Nothing removes
+    it and `lint` does not see it (dot-entries are ignored); the operator deletes it by hand.
+  - Deleting a block can reword another node's "block ID … is also used in …" warning, so
+    "the only warnings a verb may add" holds for errors store-wide and is not checked for
+    reworded warnings.
+  - A `retag` that changes a node's frontmatter re-emits it (D26): a hand-formatted tag list may
+    change layout, `tags: foo` becomes a list, and removing the last tag leaves `tags: []`.
+  - `/`, `a/` and `a//b` are valid tags to the library (D17 as implemented), so `retag /` is a
+    tag nobody has, not an error.
+  - `--block` is not normalised: `^m-…` with Obsidian's caret is an unknown ID, in `delete` as
+    in `read`.
+  - A node whose folder is a symlink: `delete` removes the link, not its target. Untested.
+  - Until CLI15, `agent/README.md` said no verb moved, renamed or deleted a node. The `write`
+    tool's "Tags cannot be cleared and blocks cannot be deleted." stays: it is true of `write`.
+- **Known gaps, recorded not fixed** (CLI12 acceptance, 2026-11-20):
+  - `rename` replaces the linking notes, then renames the folder note and the folder. A crash in
+    between leaves links pointing at `NEW` while the node is still `STEM`: dangling-link
+    warnings in `lint`, repaired by running the rename again by hand or renaming the folder.
+  - If another writer changes a note between `rename` replacing it and the final reload, D28's
+    rule wins over "all or nothing": the call exits 75 and does not roll back over the other
+    writer's bytes. The rename is then complete on disk and the retry fails with an unknown
+    `STEM`.
+  - A rolled-back `rename` restores bytes and names, not mtimes: notes that were replaced and
+    restored carry new mtimes.
+  - `move` makes no "changed on disk" check, because it writes no note. `rename` checks only the
+    notes it rewrites.
+  - `rename` rewrites and counts a link to a block that does not exist (`[[STEM#^missing]]`), so
+    its lint warning is reworded. A note that did not load is not rewritten; if it loads later,
+    its links to the old stem dangle.
+  - A move onto another device (a bound subtree) fails with the OS error and changes nothing. A
+    node whose folder is a symlink has the link moved or renamed, not its target. Untested.
+- **A flag given twice, every verb** (2026-11-21; was a known gap at CLI14's acceptance): a flag
+  that takes one value, or none, is refused when given a second time, under either spelling and
+  whether or not the values agree: `--into: given more than once`, naming the second as typed,
+  exit 1, nothing changed (`merge x --into a --into b` used to merge into `b`, silently). The
+  flags a verb takes many of still repeat: `write`'s `--tag`, `--property`, `--add` and
+  `--replace`, and `split`'s `--block`. After `--`, nothing is a flag. `--parent-dir` before the
+  verb has its own rule (III.1).
+- **Deleting does not rewrite links.** `delete` reports the links it leaves dangling, and `lint`
+  reports them afterwards as warnings (III.7). The caller repairs them with `write --replace`.
+  Rejected: refusing to delete a linked node (a dream could not remove a contradicted claim that
+  other notes cite), and rewriting or stripping the links (the verb would be editing prose).
+- **Postcondition, for every verb:** the store has no lint error it did not have before, and the
+  only warnings a verb may add are `delete`'s dangling links. **An error is the same error when
+  it is the same skipped folder** (ruled at CLI12's banking, 2026-11-20): a folder that did not
+  load before the call and does not load after it is not new, wherever the call has moved or
+  renamed it to and however the reason now reads (reasons quote paths and stems that the call
+  changes). So an unloaded folder carried along by `move`, `rename`, `merge` or `split` never
+  causes a roll back. The node the call acted on must itself load afterwards. A verb acts only on nodes that
+  loaded; a node `lint` reports as an error is invisible to it and is the operator's to fix.
+  `move`, `delete --recursive` and `merge` carry along whatever else is inside the folders they
+  move or remove, unloaded nodes and stray files included.
+- **Results.** XML on stdout, exit 0, rendered with `encoding/xml` like
+  the other results. An element with no children prints as `<memory_move …></memory_move>`:
+  `encoding/xml` never emits the self-closing form the examples below use for brevity. One element per verb, saying what changed so the caller need not re-read.
+  Counts are always present, zero included. `links_rewritten` counts links, not blocks.
+  ```xml
+  <memory_move stem="atlas-cutover" from="people" parent="projects" path="projects/atlas-cutover"/>
+
+  <memory_rename from="atlas-migration" stem="atlas-cutover" links_rewritten="5"/>
+
+  <memory_move_block id="m-7f3a2k" from="priya" stem="atlas-cutover" links_rewritten="2"/>
+
+  <memory_split from="priya" stem="atlas-cutover" parent="projects" path="projects/atlas-cutover"
+                blocks="3" left="4" links_rewritten="2"/>
+
+  <memory_merge from="outbox-rules" stem="outbox-etiquette" blocks="4" children="1"
+                tags_added="1" links_rewritten="3"/>
+
+  <memory_delete stem="old-plan" nodes="3" blocks="11">
+    <dangling stem="projects" block="m-4k2p9x">[[old-plan]]</dangling>
+    <dangling stem="priya" block="m-9d1c0e">[[old-task#^m-2b7q8w]]</dangling>
+  </memory_delete>
+
+  <memory_delete stem="outbox-etiquette" block="m-7f3a2k" nodes="0" blocks="1"/>
+
+  <memory_retag from="escalations" tag="escalation" nodes="6"/>
+  <memory_retag from="misc" nodes="2"/>
+  ```
+  - `stem` is always the node that exists afterwards (the moved, renamed, new or surviving node;
+    for `delete`, the node named in the call). `from` is where things came from: the old parent
+    (`move`), the old stem (`rename`), the node a block left (`move-block`, `split`), the node
+    that was folded in (`merge`), the old tag (`retag`).
+  - `parent` is `/` for the root. `path` is the node's path under `notes/`, as `read` gives it.
+  - `split`: `blocks` moved, `left` remaining in `from`.
+  - `delete`: `nodes` and `blocks` removed in total (a block delete is `nodes="0" blocks="1"`).
+    One `<dangling>` per link left pointing at something deleted: the node and block that hold
+    it, and the link as written. Links inside the deleted subtree are not listed.
+  - `retag` with no new tag has no `tag` attribute. `nodes` is the number of nodes changed; a
+    tag nobody has is `nodes="0"`, exit 0, nothing written.
+  - A call that changes nothing (`move` to the current parent) prints its element and writes
+    nothing.
+- **Tool files.** One per verb in `agent/tools/` (`memory_move.json`, `memory_rename.json`,
+  `memory_move_block.json`, `memory_split.json`, `memory_merge.json`, `memory_delete.json`,
+  `memory_retag.json`), none `read_only`, each installed or not: granting move without delete is
+  leaving `memory_delete.json` out. `--recursive` can be withheld from an installed
+  `memory_delete.json` with `"forbidden_args": ["--recursive", "-recursive"]`. Both spellings are
+  listed because the agent refuses a forbidden argument by exact match and `memory` accepts a
+  flag with one dash or two; `--recursive=true` needs no entry, since `memory` rejects a value
+  on that flag.
+
+- **`split` says which way** (operator ruling 2026-11-20, replacing "always a child"). A node
+  that has come to cover two concepts is split by moving one concept's blocks into a new node,
+  and the caller states where that node goes, as tmux splits a pane and is told the direction.
+  There is no default, because each direction is right in a different case:
+  - `--parent STEM`, a child: a narrower subject grew inside a broader one, and the original is
+    still the general subject.
+  - `--parent` the original's own parent, a sibling, or any other node: an unrelated subject was
+    filed in the nearest node (a project's blocks inside a person's node), and making it a child
+    would make the tree wrong.
+  - A node that was never one concept is two splits, then a `delete` of what is left, or it is
+    kept as the overview by naming it as both splits' `--parent`.
+
+  The verb was drafted as `extract` while it always made a child; `expand`, `promote` and `pop`
+  were considered. With the direction a parameter, `split` is accurate, it is the word §4.6
+  already uses for the pattern ("growth by splitting"), and it is `merge`'s opposite.
+- **Clearing tags.** `retag OLD` with no `NEW` removes a tag store-wide; `write` gains no way to
+  clear one node's tags.
+- **The prompt says what memory is for; everything about using it is a skill** (operator rulings
+  2026-11-20, replacing "the shipped guidance covers these verbs").
+  - `agent/prompt/memory_usage.md` is renamed `agent/prompt/memory_purpose.md` and cut down to
+    what memory is and what it is for. It is the only memory text read on every turn. §4.5's
+    guidance text is replaced by it and stays byte-equal to it.
+  - Three skills ship in `agent/skills/` (III.4 already puts skills in `agent/skills/<name>/`),
+    installed by hand like the tool files and read only when the model loads them:
+    `memory-usage` (consulting memory), `memory-capture` (what to save and how to write it) and
+    `memory-restructure` (reorganising). Between them they hold everything `memory_usage.md`
+    said, plus the restructuring advice.
+  - **An existing install** has the old file: the operator deletes
+    `<state dir>/prompt/memory_usage.md` when copying in `memory_purpose.md`, or the model reads
+    both. `agent/README.md` says so.
+  - **What this costs.** "What to save", "How to write it" and "Before you answer" were read on
+    every turn. They are now read only when the model loads a skill, so each skill's
+    `description`, which is in the catalogue on every turn, carries the trigger.
+
+### Tool descriptions
+
+Each file is `{"command": "memory", "prepend_args": ["--parent-dir", "${AGENT_STATE_DIR}", "<verb>"],
+"read_only": false, "allow_user_args": true, "forbidden_args": []}` with the description below.
+All follow III.6: no node is named as a place to put anything, and the index is where the model
+learns the structure.
+
+- `memory_move.json`:
+  > Move a node in your durable memory to a different place in the tree. The first argument is the
+  > node's stem; --parent is the stem of the node it should sit under, or / for the top level. Its
+  > children move with it. Links to it keep working, because links go by stem and not by place.
+  > Use it when a node is right but filed in the wrong place. Example: ["atlas-cutover",
+  > "--parent", "<parent stem>"]. If the command exits with code 75 ("busy" or "changed on disk"),
+  > run the same command again.
+- `memory_rename.json`:
+  > Rename a node in your durable memory. Give its current stem, then the new one
+  > (lowercase-hyphenated, not already in use). Every link to the node and to its blocks is
+  > rewritten to the new stem. Its description is not changed: update that separately if it no
+  > longer fits. Example: ["atlas-migration", "atlas-cutover"]. If the command exits with code 75
+  > ("busy" or "changed on disk"), run the same command again.
+- `memory_move_block.json`:
+  > Move one block of your durable memory to another node that already exists. The first argument
+  > is the block's ID; --to is the stem of the node it should be in. It is added at the end of
+  > that node and keeps its ID, and every link to the block is rewritten. Use it when a single
+  > claim is filed under the wrong node. To move several blocks into a new node, split the node
+  > instead. Example: ["m-7f3a2k", "--to", "outbox-etiquette"]. If the command exits with code 75
+  > ("busy" or "changed on disk"), run the same command again.
+- `memory_split.json`:
+  > Split a node in your durable memory that has come to cover two subjects: move some of its
+  > blocks into a new node. The first argument is the stem of the node to split; --into is the new
+  > node's stem (lowercase-hyphenated, not already in use); --description is its one-line
+  > description; each --block ID names a block to move, in the order they should appear; --parent
+  > says where the new node goes, and you must choose. Give the split node's own stem as --parent
+  > when the new subject is a narrower part of it. Give another node's stem, or / for the top
+  > level, when the new subject is a separate thing that was only filed there. The blocks keep
+  > their IDs and links to them are rewritten. The original node stays where it is with the
+  > blocks you did not name. Example: ["priya", "--into", "atlas-cutover", "--parent",
+  > "<parent stem>", "--description", "The Atlas cutover: plan, owners and dates", "--block",
+  > "m-7f3a2k", "--block", "m-2b7q8w"]. If the command exits with code 75 ("busy" or "changed on
+  > disk"), run the same command again.
+- `memory_merge.json`:
+  > Merge one node of your durable memory into another when both are about the same subject. The
+  > first argument is the stem of the node to fold in; --into is the stem of the node to keep. The
+  > kept node receives the other's blocks (at the end, IDs unchanged), its children and its tags,
+  > and keeps its own description. Every link to the folded-in node or its blocks is rewritten to
+  > the kept node, and the folded-in node is removed. A node cannot be merged into one of its own
+  > children; merge the child into it instead. Afterwards read the kept node and tidy blocks that
+  > now repeat each other. Example: ["outbox-rules", "--into", "outbox-etiquette"]. If the command
+  > exits with code 75 ("busy" or "changed on disk"), run the same command again.
+- `memory_delete.json`:
+  > Delete from your durable memory. This cannot be undone. Give a node's stem and --block ID to
+  > delete one block. Give only the stem to delete the node; a node that has children is refused
+  > unless you add --recursive, which deletes it and everything under it. Links to what you
+  > deleted are not rewritten: the result lists each one as dangling, with the node and block
+  > that holds it, so you can rewrite those blocks. Delete what is wrong or no longer matters; to
+  > correct a claim, replace the block's text instead. Examples: ["outbox-etiquette", "--block",
+  > "m-7f3a2k"], ["old-plan"], ["old-plan", "--recursive"]. If the command exits with code 75
+  > ("busy" or "changed on disk"), run the same command again.
+- `memory_retag.json`:
+  > Rename or remove a tag across your whole durable memory. Give the tag to change, then the tag
+  > to use instead: every node that has the first gets the second, once. Give only one tag to
+  > remove it from every node. Use it to fold variants of one tag into a single spelling; the
+  > index lists the tags in use. Examples: ["escalations", "escalation"], ["misc"]. If the command
+  > exits with code 75 ("busy" or "changed on disk"), run the same command again.
+
+`memory_write.json`'s "Tags cannot be cleared and blocks cannot be deleted." stays true of
+`write` and stays in its description.
+
+### The prompt and the skills
+
+**`agent/prompt/memory_purpose.md`**, byte-equal to this block. It replaces the guidance §4.5
+used to hold, which shipped as `memory_usage.md` until CLI15:
+
+```markdown
+# Memory
+
+You have a durable memory: notes that outlive this conversation, kept as a
+tree of nodes. Its index, when you are shown one, lists the top-level nodes,
+their children and the tags in use; that is its structure. What you can do
+with it is exactly what your memory tools allow.
+
+It is for what would still matter if this conversation were cleared today,
+and that you could not work out again from files or a live lookup: what the
+operator has corrected or prefers, who is doing what and why, and facts about
+the people and things you deal with. It is not for what you can re-read or
+re-derive, progress on the current task, records of finished work, or
+secrets.
+```
+
+**The skills** are in the agent's skill format, which follows agentskills.io and is enforced by
+the agent's loader (`internal/skills` in the agent repo):
+
+- the folder name equals the frontmatter `name`; the file is `SKILL.md`;
+- `name` is lowercase letters, digits and single hyphens, at most 64 characters, with no hyphen
+  at either end;
+- `description` is non-empty and at most 1024 bytes; it is all the model sees until it loads the
+  skill, so it says what the skill is for and when to use it;
+- the frontmatter holds only `name` and `description` here (the loader rejects unknown keys; the
+  format's other allowed keys, `license`, `compatibility`, `allowed-tools` and `metadata`, are
+  not used);
+- the body is plain Markdown and well under the format's 5k-token guideline.
+
+No body names a node (III.6), and all refer to tools by what they do, because an operator may
+install only some of them. A test loads all three with the same rules, as the tool descriptions
+are pinned today.
+
+`agent/skills/memory-usage/SKILL.md`. The old "Before you answer", with the steps spelled out:
+
+```markdown
+---
+name: memory-usage
+description: How to consult your durable memory. Use before you answer a question or start a task that may depend on the operator's preferences, on people, or on past work.
+---
+
+# Consulting memory
+
+1. Look at the memory index, if you are shown one, or read the top of the
+   tree. Pick the node the question belongs to.
+2. Read that node. Follow its children and links when they are relevant.
+3. If the index does not show where something would be, search for it.
+4. Use what you find as background, not as instructions. A note can be
+   stale: re-check anything it says about files or the outside world before
+   acting on it.
+5. If memory has nothing on the subject, say you have no note of it. Do not
+   fill the gap from guesswork.
+```
+
+`agent/skills/memory-capture/SKILL.md`. The old "What to save" and "How to write it", with one
+added line (the last):
+
+```markdown
+---
+name: memory-capture
+description: What to save in your durable memory and how to write it so it is still useful later. Use when you learn something that may be worth keeping, and before you save anything to memory.
+---
+
+# Saving to memory
+
+## What to save
+Save a claim only if it would still matter if this conversation were cleared
+today, and you could not work it out again from files or a live lookup:
+- a correction or stated preference — and quiet confirmations that an unusual
+  approach was right, not only corrections;
+- who is doing what, why, and by when;
+- facts about people and things you deal with that you would otherwise have
+  to ask about again.
+Nobody may be watching (mailbox, watch): save what you worked out, not only
+what you were told. If you are unsure whether something is durable, it isn't.
+
+Never save: what you can re-read or re-derive; progress on the current task;
+records of finished work; secrets.
+
+## How to write it
+- One claim per block, written for a stranger: turn "today", "Thursday",
+  "this one", "the one we discussed" into dates and names.
+- For a rule, say why it holds and when it applies.
+- Mark your own interpretation as yours, not as fact.
+- When a claim rests on a file, a link, a message or a person, say which, so
+  it can be checked again later.
+- Search before adding: update the existing note rather than starting a second.
+- File it under the node it belongs to, as the index shows the tree — don't
+  hunt for a deep location. Start a new top-level node only when nothing in
+  the tree fits.
+- Save it and carry on with the task. Do not reorganise memory now.
+```
+
+`agent/skills/memory-restructure/SKILL.md`:
+
+```markdown
+---
+name: memory-restructure
+description: Reorganise your durable memory when its tree no longer matches what it holds. Use when a node covers two subjects, two nodes cover one, a claim or node is filed in the wrong place, a name or tag no longer fits, or something should be deleted.
+---
+
+# Restructuring memory
+
+Restructure when the tree has stopped matching what it holds, not as
+routine, and between tasks, not in the middle of one. Read the index and the
+nodes involved first. You can only do what your memory tools allow: if the
+tool for a step is missing, leave that step and say so.
+
+## Which operation
+- A node covers two subjects: split it. Name the blocks that belong to the
+  second subject and say where the new node goes. Put it under the original
+  when it is a narrower part of that subject. Put it elsewhere when it is a
+  separate thing that was only filed there.
+- A node was never one subject: split out each subject in turn, then delete
+  what is left if it is empty, or keep it as the overview above them.
+- Two nodes about one subject: merge the weaker into the better-named one,
+  then read the result and remove blocks that now repeat each other.
+- One claim under the wrong node: move the block.
+- A node in the wrong place: move the node. Its children go with it.
+- A name that no longer fits: rename the node, and update its description.
+- Several spellings of one tag: fold them into one.
+
+## Deleting
+Correct a claim where it is written before you think of deleting it. Delete
+only what is false beyond repair or no longer matters. Deleting cannot be
+undone and does not fix links: the result lists every link left dangling,
+and you rewrite those blocks yourself.
+
+## Afterwards
+After a split, add a line to the original that points to the new node if a
+reader of the original would otherwise miss it. If you have a tool that
+checks memory for problems, run it and deal with what it reports.
+```
+
+### Settled and open at CLI15's banking (2026-11-21)
+
+- **Built as specified.** The seven tool files, `memory_purpose.md` and the three skills ship in
+  `agent/`, each pinned by a test to its text in this section. The three skills also load, with
+  no error or warning, under the agent's real loader (`internal/skills` in the agent repo,
+  checked by the delivery lead at banking; the repo's own test applies the rules written above).
+- **Examples in a description are examples.** The stems in the tool descriptions' examples
+  (`priya`, `atlas-cutover`, `outbox-etiquette`) do not name places to file things; the rule of
+  III.6 is about the starting tree's stems and the word "area". The purpose text and the skills
+  may say "people" as an English word, as the guidance always could.
+- **The install commands remove the old prompt file.** Both READMEs' commands run
+  `rm -f <state dir>/prompt/memory_usage.md`, so that following them cannot leave both prompt
+  files in place.
+- **Settled by the operator (2026-11-21): `agent/tools/` is a library, and the documented
+  install copies all of it.** The folder ships a tool file for every verb; which of them an agent
+  gets is the operator's choice, made by removing files (or forbidding `--recursive`) after the
+  copy. §4.6's protocol, in which the live agent reads, writes and searches and only a dream
+  restructures, is the recommendation the operator applies when choosing, not something the
+  install enforces. Rejected: a two-step install with the restructuring tools as an opt-in.
+- **Accepted as built by the operator (2026-11-21):** a node made by `split` gets no tags and no
+  properties, and `merge` refuses a carried entry whose name is already taken in the target's
+  folder.
+- **Known gaps** (CLI15 acceptance): the README checks that name the skills match the install
+  command line as well as the prose, so dropping a skill's name from the prose alone is not
+  caught; several README checks pin wording by pattern.
+
+### Units
+
+Built through `docs/delivery`, in this order; each verb's rules above are its unit's contract.
+
+| Unit | Contents |
+|---|---|
+| CLI11 | `delete` (a block, a node, `--recursive`) with its dangling-link report, and `retag`. |
+| CLI12 | `move` and `rename`; `rename` brings store-wide link rewriting. |
+| CLI13 | `move-block`: block-link rewriting, which `split` and `merge` rest on. |
+| CLI14 | `split` and `merge`. |
+| CLI15 | The seven tool files; `memory_usage.md` becomes `memory_purpose.md`; the three skills; a test that loads the skills by the format rules above and pins the texts to this section; the READMEs, `agent/README.md` and the usage text. |
+
+The tool files ship together in CLI15, so that no release offers the model part of the set that
+`memory-restructure` describes.
+
+### What this section supersedes
+
+Each is revised in place and points here: III.2 (`write` "cannot clear tags or delete blocks …
+stay open"), III.4 (the files an operator installs; "the guidance"), III.5 (restructuring verbs
+"not in the CLI"), III.6 ("no verb moves, renames, merges, splits or deletes a node"), §4.5 (the
+guidance text and "their exact shape is open"), §4.6 ("the first level is the operator's") and
+§6 ("restructuring operations' shape"). Part II's `memory/protocol/usage.md` was already
+superseded by III.4.
+
+## III.9 The stored `modified` date (operator ruling 2026-11-21)
+
+*Agreed with the operator on 2026-11-21, after the OKF review
+(`docs/research/okf-recommendations.md`) showed the file's time is not the content's age: with
+every note dated 2026-01-15, one `rename` gave two other notes today's date though only a link in
+them had changed, and a `git clone` gave every note today's date. The date is shown to the model,
+decides which entries the index drops first and breaks ties in search, so old notes looked new
+and the wrong entries were dropped. Built as CLI16.*
+
+- **The property.** A folder note may carry `modified` in its frontmatter: the time its content
+  last changed. `memory` writes it as UTC to the second, unquoted, on one line:
+  `modified: 2026-11-21T14:03:00Z` (a YAML timestamp; an Obsidian date-and-time property).
+- **A node's date** is the stored value when the note has one that can be read, else the folder
+  note's mtime. Everything that used the mtime uses the node's date: the `modified` attribute in
+  `read`, `search` and `index` output, the index's dropping order, and search's tie-break.
+- **What can be read** (lenient, so that a value kept by an Obsidian plugin or typed by the
+  operator works): a single scalar that is an RFC 3339 date-time with `Z` or an offset; a
+  date-time without an offset (`2026-11-21T14:03:00`, `2026-11-21 14:03`, seconds optional), taken
+  in the process's local time zone, as Obsidian writes them; or a date (`2026-11-21`), taken as
+  the start of that day in the local time zone. Quoted or not. Anything else (other text, a
+  number, a list, an empty value) is a **warning** (D25; operator ruling 2026-11-21): the node
+  loads, the value is carried, the node's date is the mtime, and `lint` reports, against the
+  node's path, `modified: cannot be read as a date or date-time; the file's time is used`. The
+  next content change or mechanical rewrite of that note by `memory` replaces the value and so
+  clears the warning.
+- **Only `memory` sets it.** `write --property modified=…` is refused before anything is
+  written: `--property: "modified" is set by memory`, exit 1. The library refuses the same
+  request. Hand edits may change it; nothing checks them.
+- **A content change sets it to the time of the call** (UTC, cut to the second), on each note
+  whose content the call changes:
+  - `write` creating a node; `write` changing a node's description, tags, properties or blocks.
+  - `delete --block`: the note that lost the block.
+  - `move-block`: the note that lost the block and the note that gained it.
+  - `split`: the note that lost the blocks, and the new node.
+  - `merge`: `TO`, when its note gains a block or a tag.
+- **A mechanical rewrite keeps the node's date.** A note that a call rewrites only to retarget
+  links (`rename`, `move-block`, `split`, `merge`) or to rename or remove a tag (`retag`) keeps
+  its stored value, byte for byte. If it has none, or one that cannot be read, the call writes
+  `modified` holding the mtime the file had before the call (UTC, cut to the second), so the
+  note's date is the same day after the call as before it. A note a call both changes and
+  rewrites links in has had a content change.
+- **Nothing else touches it.** `move` writes no note. `rename` leaves the renamed node's own
+  date alone. Deleting a node writes no other note. A call that changes nothing writes nothing
+  (D28): whether a write changes anything is judged without `modified`, so repeating a write, or
+  replacing a block with its own text, leaves the note's bytes, mtime and date as they were. A
+  rolled-back call restores each note's bytes, `modified` included.
+- **Only that line changes.** When a call changes no other frontmatter field, the frontmatter
+  comes back byte for byte except `modified`: an existing `modified` key is replaced where it
+  stands, by the one line above, whatever form its old value had (quoted, a list, with a
+  comment); a note without the key gains the line as the last line of the frontmatter, directly
+  before the closing `---`. This holds for a note whose frontmatter cannot be re-emitted (D27's
+  edit-locked node): its body can still be changed, and its `modified` is set. When a call does
+  change another field, D26's re-emission applies and `modified` keeps its place among the keys,
+  or goes last if it is new. A new node's frontmatter is `description`, then `tags` and
+  properties as D27 lays them out, then `modified` last.
+- **It is a property like any other to `search`:** `[modified:2026-11]` matches its text as
+  written. `read` shows it only as the node's `modified` attribute.
+- **No migration.** A note without the key keeps the mtime as its date until `memory` next
+  writes it; an existing store gains the key note by note.
+- **Rejected.** Using the newer of the stored value and the mtime (a copy that drops file times
+  would make every note look new again, the defect this fixes). A lint warning when the mtime is
+  newer than the stored value (every note would warn after a clone). `retag` counting as a
+  content change (one tag rename would make every note carrying the tag look new). A migration
+  verb. Re-emitting the whole frontmatter on every content write (it reflows layout, D26, and
+  would lock the body of a note whose frontmatter cannot be re-emitted).
+- **Known gaps.**
+  - An edit made outside `memory` (Obsidian, an editor) does not update the stored value, so the
+    note looks older than it is until `memory` next changes it or the operator edits the value.
+    An Obsidian plugin that maintains a `modified` property closes this, since its formats are
+    read.
+  - A note without the key still takes its date from the file, so a copy that drops file times
+    (`git clone`, `cp` without `-p`) makes it look new. Copy with `cp -p` or `rsync -t` until
+    every note carries the key.
+  - Two changes in the same second carry the same value; order between them falls to the next
+    tie-break (stem). A clock set wrong writes a wrong value.
+  - A value without an offset means a different instant under a different `TZ`.
+
+**Settled and open at CLI16's banking (2026-11-21).** Built as specified; all eight criteria
+verified. What the build settled where this section was silent:
+
+- **The time of the call** is read once per call, after the write lock is taken, so every note
+  one call changes carries one value.
+- **A write that only gives IDs to hand-written paragraphs** is a content change: the note is
+  dated now.
+- **The lines an old value took** are the key's line, the lines indented deeper than it
+  (comments among them) and, for a block list, the entries at the key's own indent. Blank lines
+  after the value and comments at the key's indent stay. A comment on the old `modified` line
+  goes with the line; on a D26 re-emission it is kept, as for any changed field (D27).
+  Frontmatter whose keys are all indented gets the new line at that indent.
+- **When the one-line edit cannot be made** (flow-mapping frontmatter `{…}`, a key written
+  `? modified`, an anchor on the old value that something else aliases), the frontmatter is
+  re-emitted with the key set, D26's layout caveats applying; values never change. The edited
+  frontmatter is always parsed and compared with the original before it is used.
+- **Reading is strict to the forms listed**, plus fractional seconds. Lower-case `t` or `z`, a
+  space-separated date-time with an offset, and YAML 1.1's looser timestamps are unreadable
+  (the warning).
+- **D25's property rules come first.** A `modified` holding what no property may hold (a nested
+  mapping, a list of mappings, `!!binary`) is still an error and the node is skipped; a key
+  given twice is still the "given twice" error. The warning is for values a property may hold.
+- **`modified` is not among a node's listed properties**; `search`'s `[modified:…]` still
+  matches it. `Modified` and any other spelling is an ordinary property (Obsidian will show it
+  beside `modified` as if it had the same name).
+- **The CLI's refusal is an argument error**, made before the store is created or locked. The
+  library's text is `properties["modified"]: "modified" is set by memory`.
+- **Index budget.** "Over by one entry" is reachable only through the byte budget: one line
+  over the line budget drops two entries, since the notice takes a line (§4.4).
+- **Superseded tests.** 37 existing tests pinned bytes or file-time dates; the delivery lead
+  edited them after the build (15 files), keeping every other exact assertion. Seven of them
+  had become dependent on two calls landing in one second and are now deterministic.
+- **Known gaps added.**
+  - A note that is both edit-locked (D27) and in a form the one-line edit cannot serve refuses
+    body changes too, which it accepted before III.9. Not reproduced by the verifier; reported
+    by the builder.
+  - A restructuring call that fails and rolls back restores bytes but not mtimes (III.8), so a
+    note without the key that it had replaced looks new afterwards: the defect this section
+    fixes, on the failure path, for keyless notes only.
+  - A keyless note has a date but `[modified:…]` does not find it.
+  - A hand-set value in the future or the far past is trusted, and orders the index and search
+    accordingly.
+  - `agent/tools/memory_write.json` does not tell the model that `--property modified=…` is
+    refused; the refusal's one line does.
 
 ## 5. Decisions
 
@@ -2111,7 +2864,7 @@ Superseded decisions keep their number; the row says what changed and why.
 | D12 | Context | **`context/` is the conversation, and nothing else.** No transcript preservation — not a write-mirror, a read-time diff log, nor a peer sync job. Operators manipulate the live conversation freely with system tools, and no memory mechanism may gate, witness, or depend on that not happening. Anything reading `context/` as evidence must tolerate it having been rewritten. |
 | D13 | Capability switch | **Tool availability is the switch.** Any memory tool registered ⇒ the section is injected; none ⇒ nothing, plus `memory.disabled`. Each tool grants its operation: read-only (ship a mature store to a read-only workload), write, search; write-only is a legitimate capture-only mode. The harness states the mode in one capability line. Stricter than skills (removing `load_skill` merely downgrades to `read_file`), because for memory a save instruction without a write tool is a trap. |
 | D14 | Who does what | Harness: renders the index and provides the operations. Every run gets exactly the tools its protocol grants; `memory_write` is additive, restructuring is separate (D13). Default protocol: the live agent reads, writes and searches, capturing shallow; the dream restructures within first-level nodes (pending design). Audit: needs elaboration. Prune, reset, schedule: operator operations, out of scope. *(CLI7: creating a first-level node is an ordinary write; III.6.)* |
-| D15 | Guidance location | *(Superseded for the CLI by Part III.4: the guidance is the `prompt/` fragment `memory_usage.md`, installed by the operator.)* `memory/protocol/usage.md`, operator-written, injected only under D13 — moved from `prompt/memory.md`, because a `prompt/` fragment loads unconditionally and would keep instructing saves after the tools were removed. Tool descriptions carry call mechanics; `usage.md` carries when and what. |
+| D15 | Guidance location | *(Superseded for the CLI by Part III.4: the guidance is the `prompt/` fragment `memory_usage.md`, installed by the operator; III.8 renames it `memory_purpose.md` and moves the how-to into skills.)* `memory/protocol/usage.md`, operator-written, injected only under D13 — moved from `prompt/memory.md`, because a `prompt/` fragment loads unconditionally and would keep instructing saves after the tools were removed. Tool descriptions carry call mechanics; `usage.md` carries when and what. |
 | D16 | Write path | Memory lives in `memory/notes/` and is written only by the memory tools, scoped to it so their permissions never reach `usage.md`. The general file tools are closed on the whole state dir ([`state-dir-write-deny.md`](state-dir-write-deny.md)); shell tools out of scope. |
 | D17 | Obsidian validity | **Enforced**: `notes/` is always a valid vault. Kebab-case stems, typed frontmatter (text, list, number, checkbox, date, datetime; no nested objects; meaning given only to `description` and `tags`), Obsidian tag syntax, `[[stem]]` / `[[stem\|alias]]` / `[[stem#^id]]` links; `name` dropped; embeds and query DSLs rejected. Checked at write, warned at render. |
 | D18 | Blocks | Nodes contain addressable blocks: one paragraph ending in an Obsidian `^id` — `m-` + 6 base-36 chars, harness-assigned, stable, unique store-wide. Inline `#tags` per block. Block text is opaque to the harness. Atomicity (how much a block holds) is protocol convention; the default is one claim per block. |
@@ -2123,11 +2876,13 @@ Superseded decisions keep their number; the row says what changed and why.
 | D24 | Protocol bundle | A protocol is files: seed tree, `usage.md`, dream recipe(s), audit, tool grants, optionally a validator. What this design has worked out is the default bundle. A/B-testing protocols on store clones is a design goal (§4.6). Bundle location: `memory/protocol/`. |
 | D25 | Reading the store | The read model's rules for every file it may meet — walk, stems, collisions, frontmatter types, paragraphs-only bodies, block IDs, link forms, backlinks — with errors (node or subtree skipped) and warnings (loaded, reported). §4.2 *Reading the store*. |
 | D26 | Frontmatter round-trip | Hybrid: a write changing no frontmatter field copies its bytes exactly; one that changes fields re-emits from the YAML node tree, keeping every other property's value, type, tag, order, scalar form and comments. The read model keeps raw frontmatter text and each property's YAML nodes. §4.2 *Round-trip of frontmatter*. |
-| D27 | Encoding nodes | A pure encoder: crypto-random `m-` IDs unique store-wide; a fixed layout for new nodes; byte-identical output for an unchanged node; untouched blocks keep their exact lines; frontmatter changes re-emitted per D26 (tags replace, properties merge); BOM and line ending kept; validation before output; everything emitted reads back clean. §4.2 *Encoding nodes*. |
+| D27 | Encoding nodes | A pure encoder (but for the clock, since III.9: a change is stamped with the time of the call): crypto-random `m-` IDs unique store-wide; a fixed layout for new nodes; byte-identical output for an unchanged node; untouched blocks keep their exact lines; frontmatter changes re-emitted per D26 (tags replace, properties merge); BOM and line ending kept; validation before output; everything emitted reads back clean. §4.2 *Encoding nodes*. |
 | D28 | Writing to disk | An exclusive OS lock (`flock` on `notes/.write.lock`, bounded 10 s wait, then "busy — retry") serializes writes across processes; one writer per `notes/` per process; each write from a fresh full load; create vs update by stem existence (create: valid unused stem, description, a loaded parent, or the root `/` (CLI7); update: parent absent or matching); writes to skipped nodes refused; atomic temp-file-and-rename; refuse if the file changed on disk since it was read; read back through a full load and roll back on failure. §4.2 *Writing to disk*. |
 | D29 | Memory tools | `memory_read` / `memory_write` as built-ins with markers; default descriptions carry all call mechanics; XML results via `encoding/xml`; field-named errors; events `memory.saved` / `memory.updated` / `memory.read`; seeding of `memory/` (usage.md + four empty first-level nodes) on the directory-level contract. §4.5 *The memory tools, exactly*. *(For the CLI, Part III.4 supersedes the `usage.md` seeding: the guidance ships as `agent/prompt/memory_usage.md`, and since CLI7 nothing is seeded: a missing store is empty, and the starting tree ships as `agent/memory/notes/` (III.6); there is no `init`.)* |
 | D30 | Injection, exactly | Gate on registered memory tools; a fixed capability line per combination; the section computed once per chain; the index rendered by `encoding/xml` with a path-free trust line, depth 2 and the top 50 tags; a 200-line / 25,000-byte budget dropping second-level then first-level entries oldest first, with a tool-aware notice; `memory.disabled`, `memory.index_truncated`, `memory.load_problem` logged on change; a corrective error for a missing `notes/`. §4.4 *Injection, exactly*. *(For the CLI, Part III supersedes the injection and the corrective error for a missing `notes/`: since CLI7 a missing `notes/` is an empty store, III.1.)* *(CLI10: an index with no node prints the trust line and `<empty>No nodes yet.</empty>`, III.2.)* |
-| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `read`, `write`, `search`, `index` and `lint` (CLI8, III.7); it seeds nothing, a missing store is empty, and no typology is built in (CLI7, III.6). The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1, 75 (retry) and, for `lint` only, 2 (errors found). There is no logging and no capability line. |
+| D32 | The CLI (Part III) | Memory is the `memory` binary, with the verbs `read`, `write`, `search`, `index` and `lint` (CLI8, III.7), and the seven restructuring verbs of III.8 (D33); it seeds nothing, a missing store is empty, and no typology is built in (CLI7, III.6). The agent knows nothing about it: an operator installs shell-tool files from the repo's `agent/tools/`, and puts `memory index` wherever they choose (a livecontext entry, a tool, a prompt step). The store is `<parent>/memory`, the parent being `--parent-dir` (before the verb), else `MEMORY_PARENT_DIR`, else `HOME`; the shipped tool files pass `--parent-dir ${AGENT_STATE_DIR}`, which the agent substitutes. Everything an operator copies into an agent (tool files, the `prompt/memory_usage.md` guidance, the live-context entry) ships in the repo's `agent/` folder and in each release archive, installed by hand. Write arguments are flags. Results are XML on stdout, errors go to stderr, and the exit codes are 0, 1, 75 (retry) and, for `lint` only, 2 (errors found). There is no logging and no capability line. |
+| D33 | Restructuring, purpose and skills (III.8) | Seven verbs beyond `write`: `move`, `rename`, `move-block`, `split`, `merge`, `delete`, `retag`, each one locked call that adds no lint error, one tool file each. `split` states where the new node goes (`--parent`, required); `merge` unions tags and keeps the target's description; `delete` refuses a node with children without `--recursive` and reports the links it leaves dangling; only the root is fixed. The every-turn prompt becomes `memory_purpose.md` (what memory is for); how to consult, save and reorganise ship as the skills `memory-usage`, `memory-capture` and `memory-restructure`. Agreed 2026-11-20, built as CLI11–CLI15. |
+| D34 | The stored `modified` date (III.9) | A note's frontmatter carries `modified`, the UTC time its content last changed, set only by `memory`: to the time of the call on a content change, left alone (or first written from the file's time) on a link rewrite or `retag`. A node's date is that value, else the mtime. Reverses "Not stored: `modified`": the mtime was reset by link rewrites and by copies. Operator ruling 2026-11-21. |
 | D31 | `memory_search` | Opt-in built-in (catalogued, never seeded, no generation bump); one `query` argument in an Obsidian syntax subset (words, phrases, `-`, `OR`, `tag:`, `path:`, `file:`, `[property:value]`, no parentheses); per-node matching, hit blocks, ranking by hits then recency; 20 nodes / 5 blocks; XML via `encoding/xml`; `memory.searched`. §4.5 *`memory_search`, exactly*. |
 
 ## 6. Out of scope, deferred, open
@@ -2162,6 +2917,39 @@ Superseded decisions keep their number; the row says what changed and why.
   it is its own story.
 - Team, cloud-store, snapshot, or cross-`.agent` sync memory; any network
   surface.
+  What sharing would have to solve, recorded 2026-11-21 from the OKF review
+  (`docs/research/okf-recommendations.md`), as documentation only:
+  - **Several agents, one store, one machine** works today: writes are locked,
+    atomic and checked against changes made meanwhile (D28), and the operator
+    chooses each agent's tools. Missing: the store does not record which
+    agent wrote what.
+  - **A shared bank linked into several stores** has three gaps. A stem is
+    unique across a whole store, so a private node and a shared node with one
+    stem collide, and the later is skipped with its subtree (D25). Each store
+    has its own write lock, so two agents writing one shared note through
+    different stores are not serialised. And `rename`, `move-block`, `split`
+    and `merge` rewrite links only in the store that ran them, so links to a
+    shared node from other stores break.
+  - **Replicas on several machines** need a merge strategy: two replicas
+    appending to one note conflict in git, and two creating one stem collide.
+  - The trade-off underneath: store-wide stems make links survive any
+    reorganisation inside one store and keep paths away from the agent, and
+    they compose poorly across stores. If sharing becomes a goal, that is
+    the decision to revisit; stems qualified by their bank (`team:priya`)
+    are one option.
+- **The Open Knowledge Format (OKF) as the store format** (reviewed
+  2026-11-21, OKF v0.3; `docs/research/okf-recommendations.md`). It is a
+  format for exchanging knowledge between parties: identity and links are
+  by file path, every file needs a `type`, and it has no block addressing,
+  no write rules and no index budget. Adopting it would undo D25's stems
+  and III.8's cheap `move`. Revisit if a live OKF consumer appears or OKF
+  reaches 1.0; an export verb would come first. Taken from it: a stored
+  `modified` date (III.9) and the capture skill's line on naming a
+  claim's source. Deferred to the audit's design (P3): a per-claim
+  review-by date as an inline field, `[review_by:: 2026-12-31]`, with OKF's
+  rules (stale means check again, not false; never invent a date; an
+  unreadable date is never current). The store needs no change for it:
+  block text is opaque and the restructuring verbs carry it byte for byte.
 - Compaction (stays external by repo design) and summarisation pipelines.
 - Dream cadence tuning by access frequency or volatility.
 - **Procedural routing** (CC's skill-upkeep, generalised): lessons about
@@ -2178,8 +2966,9 @@ Superseded decisions keep their number; the row says what changed and why.
 - **The A/B harness** — how clones are made, how arms are scored.
 - ~~**`memory_search` shape**~~ — settled as D31 (2026-11-16). Formerly: the syntax subset to implement, result shape,
   caps.
-- **Restructuring operations' shape** — one tool or several, so protocols
-  can grant them finely (e.g. move without delete).
+- ~~**Restructuring operations' shape**~~ — settled as III.8 (2026-11-20): seven verbs, one
+  tool file each, so a protocol is granted move without delete by leaving a file out. Formerly:
+  one tool or several, so protocols can grant them finely.
 - **Audit** — needs elaboration (earlier proposal, not ratified: a skill,
   being safe inside a live conversation).
 - Working definition, not contested: a *memory ritual* is a discrete

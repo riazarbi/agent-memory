@@ -1,6 +1,6 @@
 This repo is agent-memory: a long-term memory store for an AI agent, kept as a tree of markdown notes with YAML frontmatter. It is used as a standalone CLI, `memory`. An agent uses it through shell tools, and the operator decides where its index goes (a tool, a livecontext entry, the system prompt). The agent does not know memory exists; it sees only tool files.
 
-Its precedent is `adulting` (`github.com/riazarbi/adulting`): commands exposed as argv shell tools with rich descriptions. Everything an operator copies into an agent ships in this repo's `agent/` folder (tool files, the guidance, a live-context entry, an optional starting tree) and is installed by hand; see `agent/README.md`.
+Its precedent is `adulting` (`github.com/riazarbi/adulting`): commands exposed as argv shell tools with rich descriptions. Everything an operator copies into an agent ships in this repo's `agent/` folder (tool files, the purpose text, skills, a live-context entry, an optional starting tree) and is installed by hand; see `agent/README.md`.
 
 ## Where this came from
 The library `internal/memory` was built inside the agent repo (`github.com/riazarbi/agent`, branch `memory`, commit `476f7da`), where memory was a set of agent built-ins. It was moved here unchanged. The agent-side adapters (`memory_read`, `memory_write`, `memory_search`, the `<memory_index>` renderer, the memory smokes) were left behind on that branch. Read them there as reference; do not copy them in, because they import agent packages.
@@ -22,8 +22,8 @@ The library `internal/memory` was built inside the agent repo (`github.com/riaza
 - `README.md`: the Usage section, the store paragraphs and the wiring guide.
 - `agent/README.md`.
 - `agent/tools/*.json` (descriptions and `prepend_args`) and `agent/livecontext/memory_index.json`.
-- `agent/prompt/memory_usage.md`, which stays byte-equal to the spec's §4.5 guidance text.
-- `agent/memory/notes/`, which stays byte-equal to what `memory write <stem> --parent / --description <D>` creates.
+- `agent/prompt/memory_purpose.md` and `agent/skills/*/SKILL.md`, which stay byte-equal to the spec's III.8 texts.
+- `agent/memory/notes/`, which stays byte-equal to what `memory write <stem> --parent / --description <D>` creates, but for the `modified` line a create writes (the shipped notes carry none).
 - The CHANGELOG entry, which names the docs and agent files checked.
 
 Before handing over, search all of these for the old behaviour (verb names, flags, error texts, exit codes). Tests pin some of it (the guidance and tool descriptions against the spec, the README install commands, the starting tree), not all, so a green gate does not prove the docs are current.

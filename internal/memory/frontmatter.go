@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode"
 
 	"gopkg.in/yaml.v3"
@@ -50,6 +51,10 @@ func parseNote(data []byte) (*Node, []string, error) {
 		return nil, nil, err
 	}
 	n.Blocks = blocks
+	if _, has := n.Frontmatter.Field(keyModified); has && !n.dated {
+		// The frontmatter's one warning, before the body's (Part III.9).
+		warnings = append([]string{unreadableModified}, warnings...)
+	}
 	return n, warnings, nil
 }
 
@@ -96,7 +101,8 @@ func splitFrontmatter(text string) (string, []string, int, error) {
 func isDelimiter(line string) bool { return strings.TrimRight(line, " \t") == "---" }
 
 // parseFrontmatter validates the frontmatter mapping and fills n's
-// description, tags and other properties.
+// description, tags, date and other properties. A modified value that
+// cannot be read is no error: n is then not dated (Part III.9).
 func parseFrontmatter(fm string, n *Node) error {
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(fm), &doc); err != nil {
@@ -135,6 +141,12 @@ func setProperty(n *Node, key string, v *yaml.Node) error {
 		n.Description, err = description(v)
 	case keyTags:
 		n.Tags, err = tags(v)
+	case keyModified:
+		// Typed as any property is (a nested mapping is still an error);
+		// its meaning is the node's date, read from the scalar's text.
+		if _, err = propertyValue(key, v); err == nil {
+			n.Modified, n.dated = readModified(v, time.Local)
+		}
 	default:
 		var val any
 		if val, err = propertyValue(key, v); err == nil {

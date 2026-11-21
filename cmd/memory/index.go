@@ -71,8 +71,8 @@ type index struct {
 }
 
 // budgeted renders the index with the fewest entries dropped, in D30's
-// order, for it to fit: second-level entries oldest first (folder-note
-// mtime, ties by stem), then first-level entries the same way. Dropping one
+// order, for it to fit: second-level entries oldest first (by the node's
+// date, Part III.9, ties by stem), then first-level entries the same way. Dropping one
 // entry adds the notice, which can outweigh a short entry, so zero drops is
 // tried on its own; from one drop on, each further drop removes a whole
 // entry line (a first-level one has no children left by then) and grows
@@ -128,7 +128,8 @@ func fitsIndex(out []byte) bool {
 	return bytes.Count(el, []byte("\n"))+1 <= maxIndexLines && len(el) <= maxIndexBytes
 }
 
-// oldestFirst sorts nodes by folder-note mtime, ties by stem.
+// oldestFirst sorts nodes by their date (the stored modified, else the
+// folder note's mtime: Part III.9), ties by stem.
 func oldestFirst(nodes []*memory.Node) []*memory.Node {
 	sort.Slice(nodes, func(i, j int) bool {
 		if !nodes[i].Modified.Equal(nodes[j].Modified) {

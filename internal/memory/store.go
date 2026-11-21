@@ -127,9 +127,12 @@ type Node struct {
 	Path        string
 	Description string
 	Tags        []string
-	// Properties are the other frontmatter keys, in file order.
+	// Properties are the other frontmatter keys, in file order. modified
+	// is not among them: it is the node's date.
 	Properties []Property
-	// Modified is the folder note's mtime.
+	// Modified is the node's date (Part III.9): its stored modified
+	// property when that can be read as a date or date-time, else the
+	// folder note's mtime.
 	Modified time.Time
 	// Blocks are the body's paragraphs, in file order.
 	Blocks []Block
@@ -145,6 +148,9 @@ type Node struct {
 	// LineEnding is the ending of the opening --- line, "\n" or "\r\n":
 	// the one a writer uses for every line it writes (D27).
 	LineEnding string
+
+	// dated reports whether Modified came from the stored property.
+	dated bool
 
 	parent   *Node
 	children []*Node

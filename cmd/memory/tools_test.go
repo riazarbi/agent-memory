@@ -116,7 +116,7 @@ func TestToolFilesSchema(t *testing.T) {
 	for _, e := range entries {
 		names = append(names, e.Name())
 	}
-	check(t, "files in agent/tools/", names, []string{"memory_index.json", "memory_lint.json", "memory_read.json", "memory_search.json", "memory_write.json"})
+	check(t, "files in agent/tools/", names, []string{"memory_delete.json", "memory_index.json", "memory_lint.json", "memory_merge.json", "memory_move.json", "memory_move_block.json", "memory_read.json", "memory_rename.json", "memory_retag.json", "memory_search.json", "memory_split.json", "memory_write.json"})
 
 	for file, verb := range shippedTools {
 		tool := loadTool(t, filepath.Join(dir, file))

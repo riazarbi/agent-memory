@@ -135,6 +135,10 @@ func validPropertyKey(field, k string) error {
 	if k == keyDescription || k == keyTags {
 		return fieldErr(field, "%s is not an extra property; give it as the %s field", k, k)
 	}
+	if k == keyModified {
+		// Exact, case included: Modified is an ordinary property.
+		return fieldErr(field, "%q is set by memory", k)
+	}
 	return nil
 }
 

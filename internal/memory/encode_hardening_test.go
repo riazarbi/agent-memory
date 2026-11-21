@@ -107,18 +107,20 @@ const midListFixture = "---\ndescription: mid-list\nfirst: 1\nmid: old\nlast: 2\
 
 // Criterion 8(b): an updated key keeps its position. The key sits mid-list,
 // so an encoder that appended updated keys at the end would move it after
-// "last" and fail here.
+// "last" and fail here. The change dates the note: modified, new to it, goes
+// last (III.9).
 func TestEncodeChange_UpdatedKeyMidListKeepsPosition(t *testing.T) {
+	fixClock(t)
 	st, _ := storeOf(t, map[string]string{"n/n.md": midListFixture})
 	out, err := Encoder{Store: st, Rand: fixedRand(t)}.EncodeChange("n", Change{Properties: map[string]any{"mid": "new"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := frontmatterRegion(t, out.Bytes), "---\ndescription: mid-list\nfirst: 1\nmid: new\nlast: 2\n---\n"; got != want {
+	if got, want := frontmatterRegion(t, out.Bytes), "---\ndescription: mid-list\nfirst: 1\nmid: new\nlast: 2\nmodified: "+clockText+"\n---\n"; got != want {
 		t.Errorf("frontmatter\n got %q\nwant %q", got, want)
 	}
 	n := loadsClean(t, "n", out.Bytes)
-	if got, want := frontmatterKeys(n), []string{"description", "first", "mid", "last"}; !reflect.DeepEqual(got, want) {
+	if got, want := frontmatterKeys(n), []string{"description", "first", "mid", "last", "modified"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("keys = %q, want %q", got, want)
 	}
 }

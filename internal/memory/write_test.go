@@ -15,8 +15,11 @@ import (
 
 // U6 criterion 1: a create under umask 077 makes the folder inside the
 // parent's folder with mode 0755 and the folder note with mode 0644, and
-// returns the node as read back with the block's assigned ID.
+// returns the node as read back with the block's assigned ID. The node's
+// date is the time of the call, stored in the note (III.9), not the file's
+// time.
 func TestWrite_Create(t *testing.T) {
+	atCallTime(t)
 	dir := writerTree(t, nil)
 	withUmask(t, 0o077)
 	res, err := writerFor(t, dir).Write(WriteRequest{
@@ -38,6 +41,18 @@ func TestWrite_Create(t *testing.T) {
 		t.Error("create not reported as created")
 	}
 	wantReadBack(t, res.Node, n, notePath)
+	wantDatedAtCall(t, dir, "topics/outbox-etiquette", res.Node)
+}
+
+// wantDatedAtCall fails unless the note of the node at rel stores the time
+// of the call atCallTime fixed as its one modified line, and n, the node a
+// write returned for it, carries that time as its date (III.9).
+func wantDatedAtCall(t *testing.T, dir, rel string, n *Node) {
+	t.Helper()
+	wantDates(t, dir, map[string]string{rel: callText})
+	if !n.Modified.Equal(callAt) {
+		t.Errorf("%s: the returned node's date is %v, want the time of the call %v", rel, n.Modified, callAt)
+	}
 }
 
 // wantCreatedAt fails unless the node stem was created inside the parent's
@@ -69,12 +84,10 @@ func wantReadBack(t *testing.T, got, fresh *Node, notePath string) {
 	if got == nil || got.Path != fresh.Path || got.Parent() == nil || got.Parent().Stem != fresh.Parent().Stem {
 		t.Fatalf("returned node %+v, fresh %+v", got, fresh)
 	}
-	info, err := os.Stat(notePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Source != string(fileBytes(t, filepath.Dir(notePath), filepath.Base(notePath))) || !got.Modified.Equal(info.ModTime()) {
-		t.Errorf("returned node is not the file as read back: source %q modified %v (file %v)", got.Source, got.Modified, info.ModTime())
+	// The node's date as a fresh load reads it: the stored modified, else
+	// the file's time (III.9).
+	if got.Source != string(fileBytes(t, filepath.Dir(notePath), filepath.Base(notePath))) || !got.Modified.Equal(fresh.Modified) {
+		t.Errorf("returned node is not the file as read back: source %q modified %v (fresh load %v)", got.Source, got.Modified, fresh.Modified)
 	}
 	if !reflect.DeepEqual(blockTexts(got), blockTexts(fresh)) || got.Description != fresh.Description {
 		t.Errorf("returned node blocks %v description %q, fresh %v %q", blockTexts(got), got.Description, blockTexts(fresh), fresh.Description)
@@ -175,13 +188,15 @@ func TestWrite_Update(t *testing.T) {
 
 // U6 criterion 3: a property merge on topics changes only that value; the
 // rest of the frontmatter keeps its form (D26) and the body its exact bytes
-// (D27 "frontmatter-only changes").
+// (D27 "frontmatter-only changes"). The change dates the note: modified,
+// new to it, is the last key (III.9).
 func TestWrite_UpdatePropertyMergeKeepsOtherBytes(t *testing.T) {
+	atCallTime(t)
 	dir := writerTree(t, nil)
 	if _, err := writerFor(t, dir).Write(WriteRequest{Stem: "topics", Properties: map[string]any{"rank": 3}}); err != nil {
 		t.Fatal(err)
 	}
-	want := "---\ndescription: Everything else\nkind: hub # the hub\nrank: 3\ncode: \"007\"\n---\n" +
+	want := "---\ndescription: Everything else\nkind: hub # the hub\nrank: 3\ncode: \"007\"\nmodified: " + callText + "\n---\n" +
 		"\n\nTopics claim. ^m-u6bbb1\n\n\nSecond claim. ^m-u6bbb2"
 	if got := string(fileBytes(t, dir, "topics/topics.md")); got != want {
 		t.Errorf("topics.md\n got %q\nwant %q", got, want)

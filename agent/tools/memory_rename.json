@@ -1,0 +1,12 @@
+{
+  "command": "memory",
+  "description": "Rename a node in your durable memory. Give its current stem, then the new one (lowercase-hyphenated, not already in use). Every link to the node and to its blocks is rewritten to the new stem. Its description is not changed: update that separately if it no longer fits. Example: [\"atlas-migration\", \"atlas-cutover\"]. If the command exits with code 75 (\"busy\" or \"changed on disk\"), run the same command again.",
+  "read_only": false,
+  "prepend_args": [
+    "--parent-dir",
+    "${AGENT_STATE_DIR}",
+    "rename"
+  ],
+  "forbidden_args": [],
+  "allow_user_args": true
+}

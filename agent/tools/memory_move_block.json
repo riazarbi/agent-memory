@@ -1,0 +1,12 @@
+{
+  "command": "memory",
+  "description": "Move one block of your durable memory to another node that already exists. The first argument is the block's ID; --to is the stem of the node it should be in. It is added at the end of that node and keeps its ID, and every link to the block is rewritten. Use it when a single claim is filed under the wrong node. To move several blocks into a new node, split the node instead. Example: [\"m-7f3a2k\", \"--to\", \"outbox-etiquette\"]. If the command exits with code 75 (\"busy\" or \"changed on disk\"), run the same command again.",
+  "read_only": false,
+  "prepend_args": [
+    "--parent-dir",
+    "${AGENT_STATE_DIR}",
+    "move-block"
+  ],
+  "forbidden_args": [],
+  "allow_user_args": true
+}

@@ -82,10 +82,12 @@ const bodyFixture = "---\n# operator comment\ndescription: body changes   # kept
 	"Operator paragraph without an ID.\n\n\n\n" +
 	"Hard break  \nlast claim. ^m-b5aaa3\n"
 
-// U5 criterion 5: appending keeps the frontmatter bytes and every untouched
+// U5 criterion 5: appending keeps the frontmatter bytes, but for the one
+// modified line a content change adds last (III.9), and every untouched
 // block's source lines, gives the operator paragraph and the new block
 // distinct new IDs, and separates blocks by exactly one blank line.
 func TestEncodeChange_AppendKeepsUntouchedBlocks(t *testing.T) {
+	fixClock(t)
 	st, dir := storeOf(t, map[string]string{"n/n.md": bodyFixture})
 	src := fileBytes(t, dir, "n/n.md")
 	enc := Encoder{Store: st, Rand: fixedRand(t, "b5aaa1", "b5bbb1", "b5bbb2")}
@@ -93,7 +95,7 @@ func TestEncodeChange_AppendKeepsUntouchedBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := frontmatterRegion(t, out.Bytes), frontmatterRegion(t, src); got != want {
+	if got, want := frontmatterRegion(t, out.Bytes), stamped(frontmatterRegion(t, src), clockText); got != want {
 		t.Errorf("frontmatter bytes changed\n got %q\nwant %q", got, want)
 	}
 	// The first draw collides with a block already in the node.
@@ -188,7 +190,7 @@ func TestEncodeChange_FrontmatterReemittedFaithfully(t *testing.T) {
 	wantLines(t, frontmatterRegion(t, out.Bytes),
 		"d: 2026-11-14\n", "f: 1.50\n", "q: \"007\"\n", "l: [a, b]\n", "c: x # note\n", "keep: 2\n", "tags: [a, b]\n")
 	n := loadsClean(t, "n", out.Bytes)
-	if got, want := frontmatterKeys(n), []string{"description", "tags", "d", "f", "q", "l", "c", "keep", "new"}; !reflect.DeepEqual(got, want) {
+	if got, want := frontmatterKeys(n), []string{"description", "tags", "d", "f", "q", "l", "c", "keep", "new", "modified"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("keys = %q, want %q", got, want)
 	}
 	d, _ := n.Frontmatter.Field("d")
@@ -351,8 +353,8 @@ func TestRuling_TagsPlacementAndEmptyList(t *testing.T) {
 		"tagged/tagged.md": fmNote("description: d\ntags: [a, b]\nz: 1\n", ""),
 	})
 	for stem, want := range map[string][]string{
-		"first":  {"description", "tags", "z"},
-		"middle": {"a", "description", "tags", "z"},
+		"first":  {"description", "tags", "z", "modified"},
+		"middle": {"a", "description", "tags", "z", "modified"},
 	} {
 		out, err := Encoder{Store: st, Rand: fixedRand(t)}.EncodeChange(stem, Change{Tags: tagsp("x")})
 		if err != nil {
@@ -400,15 +402,18 @@ func TestRuling_DuplicateIDReplacesFirst(t *testing.T) {
 
 // Criterion 10(d): a mixed-ending file (CRLF opening line, LF elsewhere)
 // with a block appended keeps the endings of what it copies and writes the
-// new block with CRLF.
+// new block, and the modified line (III.9), with CRLF.
 func TestRuling_MixedEndings(t *testing.T) {
+	fixClock(t)
 	src := "---\r\ndescription: mixed\n---\n\nOld one. ^m-b10aa1\n\nOld two. ^m-b10aa2\n"
 	st, _ := storeOf(t, map[string]string{"n/n.md": src})
 	out, err := Encoder{Store: st, Rand: fixedRand(t, "b10bb1")}.EncodeChange("n", Change{Blocks: []BlockEdit{{Text: "New\nblock."}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "---\r\ndescription: mixed\n---\n" + // copied frontmatter
+	want := "---\r\ndescription: mixed\n" + // copied frontmatter
+		"modified: " + clockText + "\r\n" + // written date
+		"---\n" + // copied closing line
 		"\r\n" + // written blank line
 		"Old one. ^m-b10aa1\n" + "\r\n" + "Old two. ^m-b10aa2\n" + "\r\n" +
 		"New\r\nblock. ^m-b10bb1\r\n"

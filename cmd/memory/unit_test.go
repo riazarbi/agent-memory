@@ -84,3 +84,37 @@ func TestTagCounts(t *testing.T) {
 		t.Errorf("tagVocabulary = %q, want %q", got, want)
 	}
 }
+
+// A flag that takes one value is refused when given a second time, under
+// either spelling and whether or not the values agree; a flag the verb
+// declares repeatable is not.
+func TestParseArgsRefusesARepeatedFlag(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"x", "--depth", "1", "--depth", "2"}, "--depth: given more than once"},
+		{[]string{"--depth=1", "x", "-depth", "1"}, "-depth: given more than once"},
+		{[]string{"-block", "m", "--block=n"}, "--block: given more than once"},
+	} {
+		_, _, err := parseArgs(flagSet("depth", "block"), tc.args)
+		if err == nil || err.Error() != tc.want {
+			t.Errorf("%v: error %v, want %q", tc.args, err, tc.want)
+		}
+	}
+	var on bool
+	fs := flag.NewFlagSet("t", flag.ContinueOnError)
+	fs.BoolVar(&on, "exit-zero", false, "")
+	if _, _, err := parseArgs(fs, []string{"--exit-zero", "--exit-zero"}); err == nil {
+		t.Error("a boolean flag given twice: no error")
+	}
+	var got []string
+	fs = flag.NewFlagSet("t", flag.ContinueOnError)
+	fs.Func("tag", "", func(s string) error { got = append(got, s); return nil })
+	_, _, err := parseArgs(fs, []string{"--tag", "a", "-tag=b"}, "tag")
+	check(t, "repeatable: error", err, nil)
+	check(t, "repeatable: values", got, []string{"a", "b"})
+	// After --, a repeated flag is a positional and is not counted.
+	_, _, err = parseArgs(flagSet("depth"), []string{"--depth", "1", "--", "--depth"})
+	check(t, "after --: error", err, nil)
+}

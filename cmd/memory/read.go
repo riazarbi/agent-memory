@@ -175,7 +175,19 @@ func unknownStem(st *memory.Store, stem string) error {
 	for _, n := range all {
 		stems = append(stems, n.Stem)
 	}
-	msg := fmt.Sprintf("STEM %q: no such node", stem)
+	return unknownStemAmong(stem, stems)
+}
+
+// unknownStemAmong is the unknown-stem error (Part III.3): it names STEM
+// and lists up to five near matches among stems.
+func unknownStemAmong(stem string, stems []string) error {
+	return unknownNodeAmong("STEM", stem, stems)
+}
+
+// unknownNodeAmong is the unknown-stem error for the argument arg, as
+// typed: STEM, or a flag that names a node (move's --parent).
+func unknownNodeAmong(arg, stem string, stems []string) error {
+	msg := fmt.Sprintf("%s %q: no such node", arg, stem)
 	if near := nearMatches(stem, stems); len(near) > 0 {
 		msg += "; near matches: " + strings.Join(near, ", ")
 	}

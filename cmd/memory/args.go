@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 )
 
@@ -21,9 +22,13 @@ const endOfFlags = "--"
 //   - -- ends the flags, and everything after it is positional;
 //   - anything else is positional, in order.
 //
+// A flag given a second time is an error naming the second spelling, unless
+// its name is in repeatable (write's --tag, split's --block): taking the last
+// value silently would run a call the caller did not write.
+//
 // Errors name the flag as typed (--depth, -depth), never the flag package's
 // rewritten form. typed maps each flag set to the name it was typed as.
-func parseArgs(fs *flag.FlagSet, args []string) (positional []string, typed map[string]string, err error) {
+func parseArgs(fs *flag.FlagSet, args []string, repeatable ...string) (positional []string, typed map[string]string, err error) {
 	typed = map[string]string{}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -37,7 +42,11 @@ func parseArgs(fs *flag.FlagSet, args []string) (positional []string, typed map[
 			if err != nil {
 				return nil, nil, err
 			}
-			typed[strings.TrimLeft(token, "-")] = token
+			name := strings.TrimLeft(token, "-")
+			if _, again := typed[name]; again && !slices.Contains(repeatable, name) {
+				return nil, nil, fmt.Errorf("%s: given more than once", token)
+			}
+			typed[name] = token
 			i += consumed
 		}
 	}

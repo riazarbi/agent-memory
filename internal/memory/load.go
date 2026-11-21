@@ -290,7 +290,9 @@ func readFolderNote(dir, stem string, entries []os.DirEntry) (*Node, []string, e
 	if err != nil {
 		return nil, nil, err
 	}
-	n.Modified = info.ModTime()
+	if !n.dated {
+		n.Modified = info.ModTime()
+	}
 	return n, warnings, nil
 }
 

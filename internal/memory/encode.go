@@ -73,15 +73,16 @@ type Encoder struct {
 var testHookOutput func([]byte) []byte
 
 // EncodeNew encodes a new node: frontmatter with description, tags (if
-// any), then the other properties in sorted key order; a blank line; each
-// block followed by " ^<id>", blocks separated by one blank line; LF line
-// endings, no byte-order mark. A node without blocks ends at the closing
-// "---" line.
+// any), then the other properties in sorted key order, then modified, the
+// time of the call (III.9); a blank line; each block followed by " ^<id>",
+// blocks separated by one blank line; LF line endings, no byte-order mark.
+// A node without blocks ends at the closing "---" line.
 func (e Encoder) EncodeNew(n NewNode) (Encoded, error) {
 	want, err := validNew(n)
 	if err != nil {
 		return Encoded{}, err
 	}
+	want.modified, want.hasModified = modifiedText(callTime()), true
 	gen := e.idGen()
 	ids := make([]string, len(n.Blocks))
 	for i, text := range n.Blocks {
@@ -90,24 +91,30 @@ func (e Encoder) EncodeNew(n NewNode) (Encoded, error) {
 		}
 		want.blocks = append(want.blocks, Block{ID: ids[i], Text: text})
 	}
+	out, err := newNote(want)
+	if err != nil {
+		return Encoded{}, err
+	}
+	return Encoded{Bytes: out, BlockIDs: ids}, nil
+}
+
+// newNote lays out a new node's folder note from what it must load back
+// as (D27 "A new node"), and checks that it does.
+func newNote(want expectation) ([]byte, error) {
 	fm, err := encodeYAML(newFrontmatter(want))
 	if err != nil {
-		return Encoded{}, fmt.Errorf("encoding frontmatter: %w", err)
+		return nil, fmt.Errorf("encoding frontmatter: %w", err)
 	}
 	var b strings.Builder
 	b.WriteString(delimiter + lf + fm + delimiter + lf)
 	rendered := make([]string, len(want.blocks))
 	for i, blk := range want.blocks {
-		rendered[i] = renderBlock(blk.Text, blk.ID, lf)
+		rendered[i] = paragraph(blk, lf)
 	}
 	if len(rendered) > 0 {
 		b.WriteString(lf + strings.Join(rendered, lf))
 	}
-	out, err := finish(b.String(), want)
-	if err != nil {
-		return Encoded{}, err
-	}
-	return Encoded{Bytes: out, BlockIDs: ids}, nil
+	return finish(b.String(), want)
 }
 
 const delimiter = "---"
@@ -143,7 +150,11 @@ func newFrontmatter(want expectation) *yaml.Node {
 	for _, p := range want.props {
 		m.Content = append(m.Content, strNode(p.Key), valueNode(p.Value))
 	}
-	return &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{m}}
+	doc := &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{m}}
+	if want.hasModified {
+		stampDoc(doc, want.modified)
+	}
+	return doc
 }
 
 // renderBlock writes block text with its ID, every line ending in eol.
@@ -190,7 +201,9 @@ func finish(note string, want expectation) ([]byte, error) {
 
 // EncodeChange encodes the loaded node stem with the change applied (D27,
 // D26). With nothing to change, and every block already IDed, the output
-// is the file exactly as read.
+// is the file exactly as read. Whether anything changes is judged without
+// modified; when something does, modified is set to the time of the call
+// (III.9).
 func (e Encoder) EncodeChange(stem string, c Change) (Encoded, error) {
 	if e.Store == nil {
 		return Encoded{}, errors.New("EncodeChange needs the loaded store")
@@ -207,15 +220,16 @@ func (e Encoder) EncodeChange(stem string, c Change) (Encoded, error) {
 	if err != nil {
 		return Encoded{}, err
 	}
-	fm, fmChanged, err := rewriteFrontmatter(n, req)
+	doc := rewriteFrontmatter(n, req)
+	stamp := ""
+	if doc != nil || body.changed {
+		stamp = n.stampFor(true, callTime())
+	}
+	want, err := changeExpectation(n, req, body, stamp)
 	if err != nil {
 		return Encoded{}, err
 	}
-	want, err := changeExpectation(n, req, body)
-	if err != nil {
-		return Encoded{}, err
-	}
-	note, err := assemble(n, fm, fmChanged, body)
+	note, err := assemble(n, doc, stamp, body)
 	if err != nil {
 		return Encoded{}, err
 	}
@@ -285,27 +299,23 @@ func validEdits(n *Node, edits []BlockEdit) error {
 
 // assemble builds the rewritten note. Regions copied from the source keep
 // their own bytes and line endings; regions written here use the opening
-// delimiter line's ending.
-func assemble(n *Node, fm string, fmChanged bool, body bodyPlan) (string, error) {
+// delimiter line's ending. doc is the frontmatter to re-emit, nil when no
+// field changes; stamp is the modified value to set, "" for none.
+func assemble(n *Node, doc *yaml.Node, stamp string, body bodyPlan) (string, error) {
 	eol := n.LineEnding
-	lines := strings.SplitAfter(n.Source, "\n")
-	_, _, closing, err := splitFrontmatter(normalise(n.Source))
+	head, err := headWith(n, doc, stamp)
 	if err != nil {
-		return "", fmt.Errorf("node %s no longer parses as loaded: %w", n.Stem, err)
+		return "", fmt.Errorf("node %s: %w", n.Stem, err)
 	}
 	var b strings.Builder
 	if n.BOM {
 		b.WriteString(bomText)
 	}
-	if fmChanged {
-		b.WriteString(delimiter + eol + strings.ReplaceAll(fm, "\n", eol) + delimiter + eol)
-	} else {
-		b.WriteString(withEnding(strings.Join(lines[:closing+1], ""), body.changed, eol))
-	}
+	b.WriteString(withEnding(head, body.changed, eol))
 	if body.changed {
 		b.WriteString(eol + strings.Join(body.rendered, eol))
 	} else {
-		b.WriteString(strings.Join(lines[closing+1:], ""))
+		b.WriteString(strings.Join(strings.SplitAfter(n.Source, "\n")[n.closingLine()+1:], ""))
 	}
 	return b.String(), nil
 }
