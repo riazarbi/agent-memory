@@ -1843,7 +1843,7 @@ creates a node on its own (III.6).
   "reading a missing store creates nothing"). Every verb, once its arguments have passed (III.2),
   creates `<parent>/memory` and `<parent>/memory/notes` as needed (mode 0755, forced on what it
   creates; a directory that already exists keeps its mode; another process creating it first is
-  fine), and nothing else: no node, and no lock file except the one a writing verb takes (`write`, and the restructuring verbs as they are built, III.8: `delete`, `retag`, `move`, `rename`, `move-block`). Then it reports on the empty
+  fine), and nothing else: no node, and no lock file except the one a writing verb takes (`write`, and the restructuring verbs, III.8: `delete`, `retag`, `move`, `rename`, `move-block`, `split`, `merge`). Then it reports on the empty
   store: `read` with no stem prints the root with no nodes and no tags; `read STEM` is the
   unknown-stem error; `search` prints `matched="0"`; `index` prints the empty index (III.2); `lint`
   prints `nodes="0" errors="0" warnings="0"`. Once `notes/` exists, `read`, `search`, `index` and
@@ -2271,6 +2271,20 @@ exactly as it was.
     ID carried by more than one block (as `move-block`); `STEM` or `P` unknown; `NEW` refused
     by `write`'s create rules; `/` as `STEM` or `NEW`.
   - All or nothing, as `rename`: after a failure no folder `NEW` is left behind.
+  - Settled at CLI14's banking (2026-11-21), as built:
+    - Checks run in this order. Before the store is created: `/`, an invalid `NEW`, a missing
+      flag (the first missing of `--into`, `--parent`, `--description`, `--block`), a bad
+      description, the same ID twice. Then: `STEM` unknown; each block (not in `STEM`, then
+      carried by more than one block); `NEW` a loaded node's stem (its own message, "in use by
+      the node at …", since `write` would treat that as an update); `P` unknown (near matches
+      listed, as every unknown stem); `write`'s create check.
+    - The new node is made first, then the other notes are replaced, so a crash leaves a moved
+      block in both notes, never in neither.
+    - Several blocks leave `STEM` as that many `delete --block` calls would, one after another.
+    - A moved block is not re-validated as `write` validates new text: it keeps the reader
+      warnings it had, as with `move-block`. The byte-equality with a `write` create holds for
+      blocks `write` could have written, with the texts as they read after retargeting.
+    - `links_rewritten` counts links inside the moved blocks too.
 - **`merge`, exactly** (CLI14).
   - `merge FROM --into TO` folds `FROM` into `TO` and removes `FROM`:
     - `FROM`'s blocks are appended to `TO`'s note in `FROM`'s file order, each as `move-block`
@@ -2295,6 +2309,25 @@ exactly as it was.
     entry; decided 2026-11-20 without the operator, for review).
   - A child merges up into its parent like any other merge: its children land beside it.
   - All or nothing, as `rename`, with `rename`'s and `delete`'s known gaps.
+  - Settled at CLI14's banking (2026-11-21), as built:
+    - Errors name the first argument `FROM`. The carried-entry collision names `--into` and the
+      entry; it also catches a name that differs only by case on a case-insensitive filesystem,
+      a stray file named like `TO`'s note, and, on a merge upward, an entry named like `FROM`'s
+      own folder.
+    - A hand-written paragraph of `FROM` with no ID moves as text without an ID and counts in
+      `blocks`. `children` counts loaded child nodes only.
+    - `links_rewritten` counts links to `FROM` inside `FROM`'s own blocks.
+    - If `FROM` and `TO` each hold a block with the same ID (a lint warning before the call), the
+      merge is refused and nothing changes: the result would be one note carrying an ID twice.
+      The message is the encoder's generic one. `tags_added` counts each lacking tag once, even
+      if `FROM` lists it twice.
+    - `FROM`'s note must still hold the bytes that were read (exit 75 otherwise), since it is
+      discarded. A `TO` note that gains nothing is not written.
+    - Dot-entries in `FROM`'s folder are destroyed with it, as `delete` does.
+    - Known gaps: a crash after the notes are replaced and before the entries move leaves links
+      pointing at `TO` while `FROM` still exists with its blocks; an outside edit found at the
+      reload exits 75 with the merge complete on disk; symlinked folders and a `TO` on another
+      device are untested (a cross-device rename fails and rolls back).
 - **`retag`, exactly** (CLI11; operator rulings 2026-11-20).
   - It changes both places a tag lives: a node's frontmatter `tags`, and inline `#tag` words in
     block text, located as `search` locates them (D31: `#` at the start of the text or after
@@ -2354,6 +2387,9 @@ exactly as it was.
     its links to the old stem dangle.
   - A move onto another device (a bound subtree) fails with the OS error and changes nothing. A
     node whose folder is a symlink has the link moved or renamed, not its target. Untested.
+- **Known gap, every verb** (CLI14 acceptance, 2026-11-21): a single-value flag given twice
+  takes the last value, silently (`merge x --into a --into b` merges into `b`), as `write`
+  always has. Not an error today.
 - **Deleting does not rewrite links.** `delete` reports the links it leaves dangling, and `lint`
   reports them afterwards as warnings (III.7). The caller repairs them with `write --replace`.
   Rejected: refusing to delete a linked node (a dream could not remove a contradicted claim that

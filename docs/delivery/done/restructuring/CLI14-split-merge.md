@@ -158,3 +158,27 @@ Local only: Go toolchain, temp dirs. No network, no live agent.
   its own links to `FROM` retargeted, and may gain tags.
 - `cmd/memory/move_block_busy_bin_test.go` shows how the lock is held from another process.
 - The library does not log, and takes no new dependency.
+
+## Post-verification notes (2026-11-21)
+- Built in one pass. Production: `internal/memory/split.go`, `merge.go` (new);
+  `restructure.go` (`noteChange` now takes several drops, several adds and a tag list);
+  `encode.go` (`newNote` lifted out of `EncodeNew`), `write.go` (`makeNode` lifted out of
+  `create`); call sites in `delete.go`, `moveblock.go`, `rename.go`, `retag.go`;
+  `cmd/memory/split.go`, `merge.go` (new), `main.go`. Tests:
+  `internal/memory/split_merge_test.go`, `cmd/memory/split_merge_bin_test.go`,
+  `split_merge_busy_bin_test.go`. No existing test, document or `agent/` file was touched by the
+  builder (confirmed with `git diff`); the two superseded-test edits are the lock commit's.
+- Verifier: all eight criteria PASS through the real binary; 21 of 21 mutants killed; 5 of 5
+  inverted assertions failed; scope clean. The verifier's run was interrupted by a usage limit
+  and resumed from its transcript.
+- Accepted by the delivery lead on the operator's standing instruction of 2026-11-20 ("deliver
+  on this work overnight unattended"); no criterion failed and no ruling was needed that the
+  spec did not already cover. Two choices made at the lock without the operator stay marked for
+  review in III.8: a split-off node gets no tags or properties; a merge refuses a carried-entry
+  name collision.
+- Weak spots the verifier found, not rebuilt: no binary test puts a link to `FROM` inside one of
+  `FROM`'s own blocks (a library test covers it); a repeated single-value flag takes the last
+  value silently (recorded as a known gap for every verb).
+- Spec settled at banking, as built (III.8, III.1): the order of `split`'s checks; `NEW` equal
+  to a loaded stem; how several blocks leave; ID-less paragraphs in a merge; the same-ID
+  refusal; what the collision names; merge's own crash window.
